@@ -1,8 +1,8 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadState } from "../../src/sandbox.js";
+import { listStates, loadState } from "../../src/sandbox.js";
 
 describe("session state migration", () => {
   it("migrates schema 2 sessions with an empty candidate cache", async () => {
@@ -67,5 +67,20 @@ describe("session state migration", () => {
       nextMutationIndex: 0,
     });
     await rm(session, { recursive: true, force: true });
+  });
+
+  it("quarantines corrupt and half-written session state from listings", async () => {
+    const temporary = await mkdtemp(
+      path.join(os.tmpdir(), "bugbonsai-corrupt-state-"),
+    );
+    process.env.BUGBONSAI_CACHE_DIR = temporary;
+    const corrupt = path.join(temporary, "runs", "bb_corrupt");
+    const partial = path.join(temporary, "runs", "bb_partial");
+    await mkdir(corrupt, { recursive: true });
+    await mkdir(partial, { recursive: true });
+    await writeFile(path.join(corrupt, "state.json"), "{not-json");
+    await writeFile(path.join(partial, "state.json.123.tmp"), "{}");
+    expect(await listStates()).toEqual([]);
+    await rm(temporary, { recursive: true, force: true });
   });
 });

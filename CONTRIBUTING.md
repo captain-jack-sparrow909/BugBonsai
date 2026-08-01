@@ -13,6 +13,8 @@ pnpm lint
 pnpm format:check
 pnpm test
 pnpm build
+pnpm corpus
+pnpm benchmark:check
 ```
 
 Changes affecting behavior should add a fixture or adversarial oracle test. Never weaken failure matching solely to make a reduction fixture pass.
@@ -24,6 +26,9 @@ Changes affecting behavior should add a fixture or adversarial oracle test. Neve
 - Include tests that prove the original fixture is not modified.
 - Do not commit private reproductions, credentials, or raw customer logs.
 - Avoid claiming framework or package-manager support that is not exercised in CI.
+- Register deterministic real-world failure shapes in `corpus/cases.json` and
+  preserve attribution for externally derived fixtures.
+- Include before/after evidence when changing `benchmarks/budgets.json`.
 
 See `ARCHITECTURE.md` for invariants that every reducer must preserve.
 

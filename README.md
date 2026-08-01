@@ -200,6 +200,15 @@ Filesystem isolation is not an OS security sandbox. The supplied command can sti
 
 See [docs/security.md](docs/security.md) for the complete model.
 
+## Beta readiness
+
+Compatibility claims are exercised by a manifest-driven corpus on Linux,
+Windows, and macOS across supported Node releases. Versioned performance budgets
+fail CI on run-count, reduction-quality, cache, or material duration regressions.
+The fault suite covers intermittent commands, failed installers, hostile output,
+corrupt state, interruptions, and tampered exports. See
+[docs/beta-validation.md](docs/beta-validation.md).
+
 ## Programmatic API
 
 ```ts
@@ -231,6 +240,8 @@ pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
+pnpm corpus
+pnpm benchmark:check
 pnpm pack:check
 ```
 

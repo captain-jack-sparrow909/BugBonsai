@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "maxTotalDurationMs": 20000,
+  "scenarios": {
+    "node-basic": {
+      "maxDurationMs": 3000,
+      "maxCandidateRuns": 10,
+      "minFileReduction": 0.6,
+      "minByteReduction": 0.6
+    },
+    "typescript-real": {
+      "maxDurationMs": 10000,
+      "maxCandidateRuns": 20,
+      "minFileReduction": 0.2,
+      "minByteReduction": 0.5,
+      "minCacheHits": 1
+    },
+    "vitest-real": {
+      "maxDurationMs": 7000,
+      "maxCandidateRuns": 8,
+      "minByteReduction": 0.15,
+      "minCacheHits": 1
+    }
+  }
+}

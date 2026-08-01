@@ -1,8 +1,13 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os, { cpus } from "node:os";
 import path from "node:path";
 import { reduceProject } from "../src/engine.js";
 import type { ReductionOptions, ReductionResult } from "../src/types.js";
+import {
+  evaluateBenchmarkBudgets,
+  type BenchmarkBudgets,
+  type BenchmarkMeasurement,
+} from "./benchmark-budget.js";
 
 const temporary = await mkdtemp(path.join(os.tmpdir(), "bugbonsai-benchmark-"));
 process.env.BUGBONSAI_CACHE_DIR = path.join(temporary, "cache");
@@ -52,7 +57,7 @@ try {
     };
   };
 
-  const scenarios = [];
+  const scenarios: BenchmarkMeasurement[] = [];
   scenarios.push(
     await run("node-basic", {
       cwd: path.resolve("fixtures/node-basic"),
@@ -94,20 +99,29 @@ try {
     }),
   );
 
-  process.stdout.write(
-    `${JSON.stringify(
-      {
-        environment: {
-          node: process.version,
-          platform: `${process.platform}-${process.arch}`,
-          cpu: cpus()[0]?.model ?? "unknown",
-        },
-        scenarios,
-      },
-      null,
-      2,
-    )}\n`,
-  );
+  const report = {
+    environment: {
+      node: process.version,
+      platform: `${process.platform}-${process.arch}`,
+      cpu: cpus()[0]?.model ?? "unknown",
+    },
+    scenarios,
+  };
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  if (process.argv.includes("--check")) {
+    const budgets = JSON.parse(
+      await readFile(path.resolve("benchmarks/budgets.json"), "utf8"),
+    ) as BenchmarkBudgets;
+    const failures = evaluateBenchmarkBudgets(scenarios, budgets);
+    if (failures.length > 0) {
+      process.stderr.write(
+        `Benchmark budget failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}\n`,
+      );
+      process.exitCode = 1;
+    } else {
+      process.stderr.write("Benchmark budgets passed.\n");
+    }
+  }
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

@@ -4,6 +4,18 @@
   "description": "Trim any failing JavaScript or TypeScript project into a minimal reproduction.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/captain-jack-sparrow909/BugBonsai.git"
+  },
+  "homepage": "https://github.com/captain-jack-sparrow909/BugBonsai#readme",
+  "bugs": {
+    "url": "https://github.com/captain-jack-sparrow909/BugBonsai/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "node": ">=22"
   },
@@ -46,8 +58,11 @@
     "test:integration": "vitest run tests/integration",
     "test:e2e": "vitest run tests/e2e",
     "test:coverage": "vitest run --coverage",
+    "corpus": "tsx scripts/corpus.ts",
     "benchmark": "tsx scripts/benchmark.ts",
+    "benchmark:check": "tsx scripts/benchmark.ts --check",
     "pack:check": "tsx scripts/pack-check.ts",
+    "release:check": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm corpus && pnpm benchmark:check && pnpm pack:check",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "changeset publish"

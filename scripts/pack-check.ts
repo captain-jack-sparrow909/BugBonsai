@@ -8,7 +8,23 @@ const execFileAsync = promisify(execFile);
 const root = process.cwd();
 const manifest = JSON.parse(
   await readFile(path.join(root, "package.json"), "utf8"),
-) as { version: string };
+) as {
+  name: string;
+  version: string;
+  repository?: { url?: string };
+  publishConfig?: { access?: string; provenance?: boolean };
+};
+if (
+  manifest.name !== "bugbonsai" ||
+  !manifest.repository?.url?.includes(
+    "github.com/captain-jack-sparrow909/BugBonsai",
+  ) ||
+  manifest.publishConfig?.access !== "public" ||
+  manifest.publishConfig.provenance !== true
+)
+  throw new Error(
+    "Package publication metadata is incomplete or provenance is disabled.",
+  );
 const temporary = await mkdtemp(path.join(os.tmpdir(), "bugbonsai-pack-"));
 let archivePath: string | undefined;
 
@@ -42,6 +58,7 @@ try {
     "dist/verify.d.ts",
     "dist/sharing.d.ts",
     "docs/configuration.md",
+    "docs/beta-validation.md",
     "docs/plugins.md",
     "docs/sharing.md",
     "examples/plugins/full-example.mjs",

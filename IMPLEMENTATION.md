@@ -38,3 +38,8 @@
 - [x] Optional Dockerfile and GitHub issue artifacts
 - [x] CI sharing guide plus round-trip and tamper tests
 - [x] Packed-tarball validation and clean consumer installation
+- [x] Manifest-driven offline compatibility corpus with portable command tokens
+- [x] Cross-platform Node 22/24 plus Node 26 compatibility matrix
+- [x] Versioned duration, run-count, cache, and reduction-quality budgets
+- [x] Intermittency, install, process-output, executable, and state fault injection
+- [x] Canonical-repository, protected-environment trusted release workflow

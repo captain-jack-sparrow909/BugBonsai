@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "node-runtime-error",
+      "category": "runtime",
+      "fixture": "fixtures/node-basic",
+      "command": ["{node}", "failure.js"],
+      "match": "BUGBONSAI_SENTINEL_BASIC",
+      "maxRuns": 40,
+      "reducers": ["files", "package-json", "source"],
+      "expect": {
+        "minFileReduction": 0.5,
+        "maxCandidateRuns": 40
+      }
+    },
+    {
+      "id": "deep-javascript-source",
+      "category": "source-reduction",
+      "fixture": "fixtures/deep-source",
+      "command": ["{node}", "failure.js"],
+      "match": "BUGBONSAI_DEEP_SOURCE_SENTINEL",
+      "mode": "thorough",
+      "maxRuns": 30,
+      "reducers": ["deep-source"],
+      "expect": {
+        "minByteReduction": 0.15,
+        "maxCandidateRuns": 30,
+        "absentText": [
+          {
+            "path": "failure.js",
+            "text": "this declaration can disappear"
+          }
+        ]
+      }
+    },
+    {
+      "id": "typescript-compiler-error",
+      "category": "compiler",
+      "fixture": "fixtures/typescript-real",
+      "command": [
+        "{node}",
+        "{root}/node_modules/typescript/bin/tsc",
+        "--noEmit",
+        "--pretty",
+        "false"
+      ],
+      "match": "TS2322",
+      "maxRuns": 20,
+      "reducers": ["files", "json-config"],
+      "expect": {
+        "adapter": "typescript",
+        "minByteReduction": 0.4,
+        "maxCandidateRuns": 20
+      }
+    },
+    {
+      "id": "vitest-assertion-failure",
+      "category": "test-runner",
+      "fixture": "fixtures/vitest-real",
+      "command": [
+        "{node}",
+        "{root}/node_modules/vitest/vitest.mjs",
+        "run",
+        "payment.test.ts"
+      ],
+      "match": "BUGBONSAI_VITEST_SENTINEL",
+      "maxRuns": 12,
+      "reducers": ["test-structure"],
+      "expect": {
+        "adapter": "vitest",
+        "minByteReduction": 0.1,
+        "maxCandidateRuns": 12,
+        "absentText": [
+          {
+            "path": "payment.test.ts",
+            "text": "unrelated passing behavior"
+          }
+        ]
+      }
+    },
+    {
+      "id": "generic-test-structure",
+      "category": "test-structure",
+      "fixture": "fixtures/test-structure",
+      "command": ["{node}", "runner.js"],
+      "match": "BUGBONSAI_TEST_STRUCTURE_SENTINEL",
+      "maxRuns": 15,
+      "reducers": ["test-structure"],
+      "expect": {
+        "minByteReduction": 0.1,
+        "maxCandidateRuns": 15,
+        "absentText": [
+          {
+            "path": "sample.test.js",
+            "text": "unrelated behavior"
+          }
+        ]
+      }
+    }
+  ]
+}
