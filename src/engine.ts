@@ -4,12 +4,17 @@ import { minimatch } from "minimatch";
 import { detectAdapters } from "./adapters.js";
 import { createDdminSchedule } from "./ddmin.js";
 import { BugBonsaiError } from "./errors.js";
-import { DefaultFailureOracle, loadCustomOracle } from "./oracle.js";
+import {
+  CustomFailureOracle,
+  DefaultFailureOracle,
+  loadCustomOracle,
+} from "./oracle.js";
 import {
   detectPackageManager,
   type PackageManagerInfo,
 } from "./package-manager.js";
 import { runCommand } from "./process.js";
+import { loadPlugins } from "./plugin.js";
 import { defaultReducers, type Mutation, type Reducer } from "./reducers.js";
 import { writeReports } from "./report.js";
 import {
@@ -49,6 +54,7 @@ const DEFAULTS = {
   include: [] as string[],
   onlyReducers: [] as string[],
   skipReducers: [] as string[],
+  plugins: [] as string[],
   allowInstallScripts: false,
   noInstall: false,
   outputMode: "human" as const,
@@ -114,6 +120,12 @@ function resolveOptions(input: ReductionOptions): ResolvedOptions {
   }
   if (result.exitCode !== undefined && !Number.isInteger(result.exitCode)) {
     throw new BugBonsaiError("INVALID_INPUT", "exitCode must be an integer.");
+  }
+  if (result.oraclePath && result.pluginOracle) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      "Choose either a custom oracle path or a plugin oracle, not both.",
+    );
   }
   return result;
 }
@@ -440,6 +452,7 @@ async function evaluateMutation(input: {
 async function createExecutionFingerprint(
   options: ResolvedOptions,
   baseline: FailureSignature,
+  pluginFingerprint = "",
 ): Promise<string> {
   const environmentHash = sha256(
     JSON.stringify(
@@ -462,6 +475,7 @@ async function createExecutionFingerprint(
       matchRegex: options.matchRegex,
       exitCode: options.exitCode,
       customOracleHash,
+      pluginFingerprint,
       environmentHash,
     }),
   );
@@ -496,8 +510,11 @@ async function promoteCandidate(
   }
 }
 
-function selectReducers(options: ResolvedOptions): Reducer[] {
-  return defaultReducers().filter((reducer) => {
+function selectReducers(
+  options: ResolvedOptions,
+  pluginReducers: Reducer[] = [],
+): Reducer[] {
+  return [...pluginReducers, ...defaultReducers()].filter((reducer) => {
     if (
       options.onlyReducers.length > 0 &&
       !options.onlyReducers.includes(reducer.name)
@@ -591,10 +608,27 @@ async function reduceProjectInternal(
     elapsedMs: 0,
   };
   const elapsedBeforeTurn = state.elapsedMs;
+  const resumeWasPaused = Boolean(resume && state.status === "paused");
   let exportCreated = false;
   await saveState(session, state);
 
   try {
+    const plugins = await loadPlugins(
+      options.plugins,
+      resume ? state.invocationCwd : options.cwd,
+    );
+    if (
+      resume &&
+      state.pluginFingerprint !== undefined &&
+      state.pluginFingerprint !== plugins.fingerprint
+    ) {
+      throw new BugBonsaiError(
+        "INVALID_INPUT",
+        "Loaded plugin sources changed after this run was paused. Restore the original plugin versions or start a new reduction.",
+      );
+    }
+    state.pluginFingerprint = plugins.fingerprint;
+    await saveState(session, state);
     emit(options, {
       phase: "inventory",
       message: "Creating isolated project inventory",
@@ -605,15 +639,22 @@ async function reduceProjectInternal(
     const originalMetrics =
       state.originalMetrics ?? (await metrics(workingRoot));
     state.originalMetrics = originalMetrics;
-    const manager = await detectPackageManager(workingRoot, options);
+    const manager = await detectPackageManager(
+      workingRoot,
+      options,
+      plugins.packageManagers,
+    );
     const invocationDirectory = path
       .relative(options.root, options.cwd)
       .replaceAll("\\", "/");
-    const adapterMatches = await detectAdapters({
-      root: workingRoot,
-      invocationDirectory,
-      command: options.command,
-    });
+    const adapterMatches = await detectAdapters(
+      {
+        root: workingRoot,
+        invocationDirectory,
+        command: options.command,
+      },
+      plugins.adapters,
+    );
     if (!resume) {
       await install(seed, manager, options);
       const installed = path.join(seed, "node_modules");
@@ -635,9 +676,20 @@ async function reduceProjectInternal(
       ...(options.matchRegex ? { matchRegex: options.matchRegex } : {}),
       ...(options.exitCode !== undefined ? { exitCode: options.exitCode } : {}),
     };
+    const pluginOracle = options.pluginOracle
+      ? plugins.oracles.get(options.pluginOracle)
+      : undefined;
+    if (options.pluginOracle && !pluginOracle) {
+      throw new BugBonsaiError(
+        "INVALID_INPUT",
+        `Plugin oracle ${options.pluginOracle} was not found. Available plugin oracles: ${[...plugins.oracles.keys()].join(", ") || "none"}.`,
+      );
+    }
     const oracle: FailureOracle = options.oraclePath
       ? await loadCustomOracle(options.oraclePath, options.cwd, oracleOptions)
-      : new DefaultFailureOracle(oracleOptions);
+      : pluginOracle
+        ? new CustomFailureOracle(pluginOracle, oracleOptions)
+        : new DefaultFailureOracle(oracleOptions);
     const baseline =
       state.baseline ??
       (await captureBaseline(best, dependencies, scratch, options, oracle));
@@ -646,6 +698,7 @@ async function reduceProjectInternal(
     const executionFingerprint = await createExecutionFingerprint(
       options,
       baseline,
+      plugins.fingerprint,
     );
 
     const protectedPaths = new Set([
@@ -663,6 +716,11 @@ async function reduceProjectInternal(
       ].filter((file) => inventory.files.includes(file)),
       ...adapterMatches.flatMap((match) => match.relevantConfig),
       ...adapterMatches.flatMap((match) => match.protectedPaths),
+      ...plugins.sourceFiles
+        .filter((file) => isPathInside(state.projectRoot, file))
+        .map((file) =>
+          path.relative(state.projectRoot, file).replaceAll("\\", "/"),
+        ),
       ...commandProjectPaths(options),
       ...inventory.files.filter((file) =>
         options.keep.some((pattern) =>
@@ -674,7 +732,7 @@ async function reduceProjectInternal(
       ...protectedPaths,
       ...failureEntryPaths(baseline),
     ]);
-    const reducers = selectReducers(options);
+    const reducers = selectReducers(options, plugins.reducers);
     reduction: for (
       let reducerIndex = state.cursor.reducerIndex;
       reducerIndex < reducers.length;
@@ -914,6 +972,7 @@ async function reduceProjectInternal(
       command: options.command,
       invocationDirectory,
       detectedAdapters: adapterMatches.map((match) => match.name),
+      loadedPlugins: plugins.names,
       baseline,
       finalSignature,
       originalMetrics,
@@ -937,7 +996,10 @@ async function reduceProjectInternal(
     state.elapsedMs = Math.round(
       elapsedBeforeTurn + performance.now() - started,
     );
-    state.status = options.signal?.aborted ? "paused" : "failed";
+    state.status =
+      options.signal?.aborted || (resumeWasPaused && state.status === "paused")
+        ? "paused"
+        : "failed";
     if (options.signal?.aborted && exportCreated) {
       await rm(options.output, { recursive: true, force: true }).catch(
         () => undefined,

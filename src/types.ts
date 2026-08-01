@@ -57,6 +57,8 @@ export interface ReductionOptions {
   matchRegex?: string;
   exitCode?: number;
   oraclePath?: string;
+  pluginOracle?: string;
+  plugins?: string[];
   timeoutMs?: number;
   stabilityRuns?: number;
   finalRuns?: number;
@@ -123,6 +125,7 @@ export interface ReductionResult {
   command: string[];
   invocationDirectory: string;
   detectedAdapters: string[];
+  loadedPlugins: string[];
   baseline: FailureSignature;
   finalSignature: FailureSignature;
   originalMetrics: ProjectMetrics;
@@ -152,6 +155,7 @@ export interface ResolvedOptions extends Required<
     | "include"
     | "onlyReducers"
     | "skipReducers"
+    | "plugins"
     | "allowInstallScripts"
     | "noInstall"
     | "outputMode"
@@ -162,6 +166,7 @@ export interface ResolvedOptions extends Required<
   matchRegex?: string;
   exitCode?: number;
   oraclePath?: string;
+  pluginOracle?: string;
   installCommand?: string[];
   signal?: AbortSignal;
   onProgress?: (event: ProgressEvent) => void;
@@ -195,6 +200,7 @@ export interface RunState {
   elapsedMs: number;
   originalMetrics?: ProjectMetrics;
   dependencySnapshot?: string;
+  pluginFingerprint?: string;
   currentMetrics?: ProjectMetrics;
   outputDirectory?: string;
 }
@@ -218,6 +224,7 @@ export interface BugBonsaiConfig extends Omit<
     matchRegex?: string;
     exitCode?: number;
     path?: string;
+    plugin?: string;
   };
 }
 

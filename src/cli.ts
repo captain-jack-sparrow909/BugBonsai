@@ -13,6 +13,7 @@ import { loadConfig } from "./config.js";
 import { reduceProject, resumeProject } from "./engine.js";
 import { BugBonsaiError, exitCodeForError } from "./errors.js";
 import { detectPackageManager } from "./package-manager.js";
+import { loadPlugins } from "./plugin.js";
 import { cacheRoot, listStates } from "./sandbox.js";
 import type { BugBonsaiConfig, ProgressEvent, ReductionMode } from "./types.js";
 import { formatBytes, isPathInside, parseDuration } from "./utils.js";
@@ -38,6 +39,8 @@ interface CliOptions {
   onlyReducer: string[];
   installCommand?: string;
   oracle?: string;
+  pluginOracle?: string;
+  plugin: string[];
   allowInstallScripts?: boolean;
   install: boolean;
   json?: boolean;
@@ -85,6 +88,17 @@ export function createProgram(config: BugBonsaiConfig): Command {
       "--oracle <file>",
       "trusted custom failure oracle module",
       config.oraclePath,
+    )
+    .option(
+      "--plugin <specifier>",
+      "load a trusted BugBonsai plugin (repeatable)",
+      collect,
+      [...(config.plugins ?? [])],
+    )
+    .option(
+      "--plugin-oracle <name>",
+      "use a namespaced oracle from a loaded plugin",
+      config.pluginOracle,
     )
     .option(
       "--timeout <duration>",
@@ -207,15 +221,17 @@ async function doctor(
       `Invocation directory must be inside the project root: ${root}`,
     );
   }
-  const manager = await detectPackageManager(root, {
-    allowInstallScripts: false,
-  });
-  const invocationDirectory = path.relative(root, cwd).replaceAll("\\", "/");
-  const adapters = await detectAdapters({
+  const plugins = await loadPlugins(config.plugins ?? [], cwd);
+  const manager = await detectPackageManager(
     root,
-    invocationDirectory,
-    command: [],
-  });
+    { allowInstallScripts: false },
+    plugins.packageManagers,
+  );
+  const invocationDirectory = path.relative(root, cwd).replaceAll("\\", "/");
+  const adapters = await detectAdapters(
+    { root, invocationDirectory, command: [] },
+    plugins.adapters,
+  );
   const commandVersion = async (
     executable: string,
   ): Promise<string | undefined> => {
@@ -250,6 +266,7 @@ async function doctor(
     invocationDirectory: invocationDirectory || ".",
     configFile: configPath ?? null,
     detectedAdapters: adapters.map((adapter) => adapter.name),
+    loadedPlugins: plugins.names,
     gitVersion: await commandVersion("git"),
     packageManager: manager.name,
     packageManagerVersion: await commandVersion(manager.executable),
@@ -371,6 +388,9 @@ async function main(): Promise<void> {
   let quiet = Boolean(options.quiet);
   const explicitJson = program.getOptionValueSource("json") === "cli";
   const explicitQuiet = program.getOptionValueSource("quiet") === "cli";
+  const explicitOracle = program.getOptionValueSource("oracle") === "cli";
+  const explicitPluginOracle =
+    program.getOptionValueSource("pluginOracle") === "cli";
   if (explicitJson && explicitQuiet) {
     throw new BugBonsaiError(
       "INVALID_INPUT",
@@ -379,6 +399,12 @@ async function main(): Promise<void> {
   }
   if (explicitJson) quiet = false;
   if (explicitQuiet) json = false;
+  if (explicitOracle && explicitPluginOracle) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      "Choose either --oracle or --plugin-oracle, not both.",
+    );
+  }
   if (!json && !quiet) {
     process.stderr.write(`${pc.green("🌱")} ${pc.bold("BugBonsai")}\n\n`);
     process.stderr.write(
@@ -410,7 +436,13 @@ async function main(): Promise<void> {
     ...(options.exitCode !== undefined
       ? { exitCode: Number(options.exitCode) }
       : {}),
-    ...(options.oracle ? { oraclePath: options.oracle } : {}),
+    ...(options.oracle && !explicitPluginOracle
+      ? { oraclePath: options.oracle }
+      : {}),
+    ...(options.pluginOracle && !explicitOracle
+      ? { pluginOracle: options.pluginOracle }
+      : {}),
+    plugins: options.plugin,
     ...(options.installCommand
       ? { installCommand: options.installCommand.split(/\s+/) }
       : loadedConfig.config.installCommand

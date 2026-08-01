@@ -12,6 +12,7 @@ const ARRAY_FIELDS = [
   "include",
   "onlyReducers",
   "skipReducers",
+  "plugins",
 ] as const;
 const BOOLEAN_FIELDS = ["allowInstallScripts", "noInstall", "verbose"] as const;
 const NUMBER_FIELDS = [
@@ -27,6 +28,7 @@ const STRING_FIELDS = [
   "match",
   "matchRegex",
   "oraclePath",
+  "pluginOracle",
 ] as const;
 const ALLOWED_FIELDS = new Set<string>([
   ...ARRAY_FIELDS,
@@ -150,7 +152,13 @@ export function validateConfig(value: unknown): BugBonsaiConfig {
       invalid("oracle", "an object");
     }
     const oracle = config.oracle as Record<string, unknown>;
-    const allowedOracle = new Set(["match", "matchRegex", "exitCode", "path"]);
+    const allowedOracle = new Set([
+      "match",
+      "matchRegex",
+      "exitCode",
+      "path",
+      "plugin",
+    ]);
     for (const name of Object.keys(oracle)) {
       if (!allowedOracle.has(name)) {
         throw new BugBonsaiError(
@@ -159,7 +167,7 @@ export function validateConfig(value: unknown): BugBonsaiConfig {
         );
       }
     }
-    for (const name of ["match", "matchRegex", "path"] as const) {
+    for (const name of ["match", "matchRegex", "path", "plugin"] as const) {
       if (oracle[name] !== undefined && typeof oracle[name] !== "string") {
         invalid(`oracle.${name}`, "a string");
       }
@@ -198,6 +206,11 @@ export function validateConfig(value: unknown): BugBonsaiConfig {
       normalized.exitCode = typed.oracle.exitCode;
     if (normalized.oraclePath === undefined && typed.oracle.path !== undefined)
       normalized.oraclePath = typed.oracle.path;
+    if (
+      normalized.pluginOracle === undefined &&
+      typed.oracle.plugin !== undefined
+    )
+      normalized.pluginOracle = typed.oracle.plugin;
   }
   if (typed.reducers) {
     const disabled = Object.entries(typed.reducers)

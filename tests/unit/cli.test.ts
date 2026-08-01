@@ -36,4 +36,20 @@ describe("CLI option resolution", () => {
     expect(program.getOptionValueSource("json")).toBe("default");
     expect(program.getOptionValueSource("quiet")).toBe("cli");
   });
+
+  it("collects configured and command-line plugin specifiers", () => {
+    const program = createProgram({ plugins: ["configured-plugin"] });
+    program.parse([
+      process.execPath,
+      "bugbonsai",
+      "--plugin",
+      "./local-plugin.mjs",
+      "--plugin-oracle",
+      "local/sentinel",
+    ]);
+    expect(program.opts()).toMatchObject({
+      plugin: ["configured-plugin", "./local-plugin.mjs"],
+      pluginOracle: "local/sentinel",
+    });
+  });
 });

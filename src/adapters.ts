@@ -191,6 +191,7 @@ export function defaultAdapters(): FrameworkAdapter[] {
 
 export async function detectAdapters(
   context: AdapterContext,
+  additional: FrameworkAdapter[] = [],
 ): Promise<AdapterMatch[]> {
   const evidence = await gatherEvidence(context);
   const matches = defaultAdapters().map((adapter) =>
@@ -198,5 +199,10 @@ export async function detectAdapters(
       ? adapter.detectEvidence(evidence)
       : undefined,
   );
-  return matches.filter((match): match is AdapterMatch => Boolean(match));
+  const custom = await Promise.all(
+    additional.map((adapter) => adapter.detect(context)),
+  );
+  return [...matches, ...custom].filter((match): match is AdapterMatch =>
+    Boolean(match),
+  );
 }

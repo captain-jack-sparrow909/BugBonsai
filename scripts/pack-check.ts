@@ -38,7 +38,10 @@ try {
     "dist/cli.js",
     "dist/index.js",
     "dist/index.d.ts",
+    "dist/plugin.d.ts",
     "docs/configuration.md",
+    "docs/plugins.md",
+    "examples/plugins/full-example.mjs",
     "README.md",
     "LICENSE",
   ]) {
@@ -72,6 +75,15 @@ try {
   );
   if (!cli.startsWith("#!/usr/bin/env node"))
     throw new Error("Built CLI is missing its shebang.");
+  await execFileAsync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      'import { BUGBONSAI_PLUGIN_API_VERSION, definePlugin } from "bugbonsai"; if (BUGBONSAI_PLUGIN_API_VERSION !== 1 || definePlugin({ apiVersion: 1, name: "pack-check" }).name !== "pack-check") process.exit(1);',
+    ],
+    { cwd: consumer },
+  );
   process.stdout.write(
     `Packed ${archive.filename}; installed CLI reports ${version.trim()}.\n`,
   );

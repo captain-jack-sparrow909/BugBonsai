@@ -66,6 +66,8 @@ bugbonsai [options] -- <command> [...arguments]
 --match-regex <pattern>
 --exit-code <number>
 --oracle <file>
+--plugin <specifier>
+--plugin-oracle <name>
 --timeout <duration>
 --stability-runs <number>
 --final-runs <number>
@@ -157,6 +159,18 @@ Rejected candidates are cached by project content, command, oracle, normalized b
 
 Dependency candidates begin from a private copy of the last verified `node_modules` snapshot before the package manager refreshes it. This avoids rebuilding every candidate from an empty installation while ensuring mutations cannot modify the shared accepted snapshot.
 
+## Plugins
+
+Trusted ESM plugins can contribute domain-specific reducers, framework adapters, package-manager providers, and named failure oracles:
+
+```bash
+bugbonsai --plugin ./bugbonsai.plugin.mjs \
+  --plugin-oracle acme/hydration \
+  -- npm test
+```
+
+Plugin components are namespaced as `plugin/component`, validated against API version `1`, and fingerprinted for cache and resume compatibility. Plugins are explicit and never auto-discovered. See [docs/plugins.md](docs/plugins.md) and the shipped [complete example](examples/plugins/full-example.mjs).
+
 ## Package managers
 
 npm and pnpm are the primary validated paths. Package-manager declarations, every detected lockfile, and npm/pnpm workspace layouts are recorded in diagnostics and reports. If several package-manager lockfiles exist without an authoritative `packageManager` declaration, BugBonsai stops and asks for an explicit declaration or `--install-command` instead of guessing.
@@ -191,6 +205,7 @@ console.log(result.outputDirectory);
 ## Current limitations
 
 - Candidate execution is sequential for correctness.
+- Plugins are trusted in-process code, not isolated extensions.
 - Workspace installation and direct dependency pruning operate from an explicit root; Yarn Plug'n'Play, Bun workspaces, catalogs, and package-manager-specific patch/protocol edge cases remain conservative.
 - BugBonsai isolates project files, not network or external-service side effects.
 - Failure and secret matching are heuristic and intentionally favor false rejection over preserving the wrong failure.

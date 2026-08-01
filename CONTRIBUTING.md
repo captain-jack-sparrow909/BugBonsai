@@ -26,3 +26,5 @@ Changes affecting behavior should add a fixture or adversarial oracle test. Neve
 - Avoid claiming framework or package-manager support that is not exercised in CI.
 
 See `ARCHITECTURE.md` for invariants that every reducer must preserve.
+
+Plugin API changes must retain runtime validation, namespacing, and oracle authority. Treat changes to exported plugin interfaces or API-version behavior as public compatibility work, add a packed-consumer check, and document migration expectations in `docs/plugins.md`.

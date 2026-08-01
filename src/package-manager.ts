@@ -7,20 +7,91 @@ import { pathExists } from "./utils.js";
 export type PackageManagerName = "npm" | "pnpm" | "yarn" | "bun";
 
 export interface PackageManagerInfo {
-  name: PackageManagerName;
+  name: string;
   executable: string;
   lockfile?: string;
   lockfiles: string[];
-  workspaceType: "none" | "package-json" | "pnpm";
+  workspaceType: string;
   warnings: string[];
   installCommand: string[];
   installAfterManifestChange: string[];
 }
 
+export interface PackageManagerProviderContext {
+  root: string;
+  installCommand?: string[];
+  allowInstallScripts: boolean;
+}
+
+export interface PackageManagerProvider {
+  readonly name: string;
+  detect(
+    context: PackageManagerProviderContext,
+  ): Promise<PackageManagerInfo | undefined>;
+}
+
+function validateProviderResult(
+  provider: PackageManagerProvider,
+  value: PackageManagerInfo,
+): PackageManagerInfo {
+  const commands = [value.installCommand, value.installAfterManifestChange];
+  const validRelative = (file: string): boolean =>
+    !path.isAbsolute(file) &&
+    !file.replaceAll("\\", "/").split("/").includes("..");
+  if (
+    !value ||
+    typeof value.name !== "string" ||
+    typeof value.executable !== "string" ||
+    commands.some(
+      (command) =>
+        !Array.isArray(command) ||
+        command.length === 0 ||
+        command.some((part) => typeof part !== "string"),
+    ) ||
+    !Array.isArray(value.lockfiles) ||
+    value.lockfiles.some(
+      (file) => typeof file !== "string" || !validRelative(file),
+    ) ||
+    (value.lockfile !== undefined &&
+      (typeof value.lockfile !== "string" || !validRelative(value.lockfile))) ||
+    typeof value.workspaceType !== "string" ||
+    value.workspaceType.length === 0 ||
+    !Array.isArray(value.warnings) ||
+    value.warnings.some((warning) => typeof warning !== "string")
+  ) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      `Package-manager provider ${provider.name} returned an invalid result.`,
+    );
+  }
+  return value;
+}
+
 export async function detectPackageManager(
   root: string,
   options: Pick<ResolvedOptions, "installCommand" | "allowInstallScripts">,
+  providers: PackageManagerProvider[] = [],
 ): Promise<PackageManagerInfo> {
+  for (const provider of providers) {
+    let detected: PackageManagerInfo | undefined;
+    try {
+      detected = await provider.detect({
+        root,
+        allowInstallScripts: options.allowInstallScripts,
+        ...(options.installCommand
+          ? { installCommand: options.installCommand }
+          : {}),
+      });
+    } catch (error) {
+      if (error instanceof BugBonsaiError) throw error;
+      throw new BugBonsaiError(
+        "INVALID_INPUT",
+        `Package-manager provider ${provider.name} failed: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
+    if (detected) return validateProviderResult(provider, detected);
+  }
   let declared: string | undefined;
   let hasManifestWorkspaces = false;
   try {

@@ -28,4 +28,8 @@
 - [x] Reuse private copies of accepted dependency installation snapshots
 - [x] Run-budget progress and duration-derived ETA events
 - [x] Inventory, baseline, reduction, and final-validation interruption tests
+- [x] Versioned trusted-plugin loader with explicit local and package specifiers
+- [x] Namespaced third-party reducers, adapters, package-manager providers, and oracles
+- [x] Plugin-aware cache/resume fingerprint compatibility
+- [x] Complete shipped plugin example and authoring guide
 - [x] Packed-tarball validation and clean consumer installation

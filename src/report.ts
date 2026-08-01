@@ -68,6 +68,8 @@ ${[...(result.portabilityFindings.length === 0 ? ["No obvious portability proble
 
 Detected adapters: ${result.detectedAdapters.length > 0 ? result.detectedAdapters.join(", ") : "generic"}.
 
+Loaded plugins: ${result.loadedPlugins.length > 0 ? result.loadedPlugins.join(", ") : "none"}.
+
 BugBonsai uses heuristic failure matching and secret detection. Review the reproduction before sharing it publicly.
 `;
   await writeFile(path.join(result.outputDirectory, "BUGBONSAI.md"), markdown);
@@ -81,6 +83,7 @@ BugBonsai uses heuristic failure matching and secret detection. Review the repro
       installCommand: options.noInstall ? null : packageManager.installCommand,
       invocationDirectory: result.invocationDirectory,
       detectedAdapters: result.detectedAdapters,
+      loadedPlugins: result.loadedPlugins,
       packageManager: {
         name: packageManager.name,
         workspaceType: packageManager.workspaceType,

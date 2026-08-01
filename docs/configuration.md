@@ -14,6 +14,7 @@ export default {
   maxRuns: 300,
   keep: ["fixtures/**"],
   exclude: ["docs/**"],
+  plugins: ["./bugbonsai.plugin.mjs"],
   reducers: {
     files: true,
     packageJson: true,
@@ -23,14 +24,16 @@ export default {
     tests: true,
   },
   oracle: {
-    match: "PAYMENT_STATE_CORRUPTED",
+    plugin: "acme/payment-state",
   },
 };
 ```
 
 Precedence is CLI arguments, then configuration, then built-in defaults. Configuration validation rejects unknown properties and reports nested paths such as `oracle.pattern` or `reducers.test`.
 
-The flattened programmatic names `timeoutMs`, `match`, `matchRegex`, `exitCode`, `oraclePath`, `onlyReducers`, and `skipReducers` are also accepted. A `false` reducer entry adds its internal reducer to `skipReducers`; a `true` entry leaves it enabled.
+The flattened programmatic names `timeoutMs`, `match`, `matchRegex`, `exitCode`, `oraclePath`, `pluginOracle`, `plugins`, `onlyReducers`, and `skipReducers` are also accepted. A `false` reducer entry adds its internal reducer to `skipReducers`; a `true` entry leaves it enabled.
+
+Plugin paths are resolved from the invocation directory. Installed package specifiers are supported. A plugin oracle is mutually exclusive with `oraclePath`; an explicit CLI oracle selection overrides the configured oracle kind. See [plugins.md](plugins.md).
 
 Use `defineConfig` when authoring the file in a JavaScript editor that understands imported types:
 

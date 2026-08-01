@@ -48,4 +48,16 @@ describe("BugBonsai configuration", () => {
       validateConfig({ reducers: { source: false } }).skipReducers,
     ).toEqual(["source", "deep-source"]);
   });
+
+  it("accepts plugin specifiers and a namespaced plugin oracle", () => {
+    expect(
+      validateConfig({
+        plugins: ["./bugbonsai.plugin.mjs", "@scope/bugbonsai-plugin"],
+        oracle: { plugin: "scope/sentinel" },
+      }),
+    ).toMatchObject({
+      plugins: ["./bugbonsai.plugin.mjs", "@scope/bugbonsai-plugin"],
+      pluginOracle: "scope/sentinel",
+    });
+  });
 });
