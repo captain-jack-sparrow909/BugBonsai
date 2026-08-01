@@ -14,6 +14,8 @@ It then evaluates:
 
 When a baseline is unstable, stop and provide a distinctive `--match` value rather than lowering the oracle threshold blindly.
 
+Explicit text, regular-expression, and exit-code constraints are checked while capturing the first baseline, not only against later candidates. This prevents an installation or configuration error from being accepted as the starting failure when it does not contain the requested bug identity.
+
 ## Custom oracle
 
 For failures whose identity cannot be expressed with text, a regular expression, or an exit code, pass an explicit trusted ESM module:

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { BugBonsaiError } from "./errors.js";
 import type { ResolvedOptions } from "./types.js";
 import { pathExists } from "./utils.js";
 
@@ -9,6 +10,9 @@ export interface PackageManagerInfo {
   name: PackageManagerName;
   executable: string;
   lockfile?: string;
+  lockfiles: string[];
+  workspaceType: "none" | "package-json" | "pnpm";
+  warnings: string[];
   installCommand: string[];
   installAfterManifestChange: string[];
 }
@@ -18,11 +22,15 @@ export async function detectPackageManager(
   options: Pick<ResolvedOptions, "installCommand" | "allowInstallScripts">,
 ): Promise<PackageManagerInfo> {
   let declared: string | undefined;
+  let hasManifestWorkspaces = false;
   try {
     const manifest = JSON.parse(
       await readFile(path.join(root, "package.json"), "utf8"),
-    ) as { packageManager?: string };
+    ) as { packageManager?: string; workspaces?: unknown };
     declared = manifest.packageManager?.split("@")[0];
+    hasManifestWorkspaces =
+      Array.isArray(manifest.workspaces) ||
+      Boolean(manifest.workspaces && typeof manifest.workspaces === "object");
   } catch {
     // Package metadata is optional for the generic command path.
   }
@@ -32,24 +40,52 @@ export async function detectPackageManager(
     ["yarn", "yarn.lock"],
     ["bun", "bun.lock"],
   ];
-  let lock: [PackageManagerName, string] | undefined;
+  const foundLocks: Array<[PackageManagerName, string]> = [];
   for (const candidate of locks) {
-    if (await pathExists(path.join(root, candidate[1]))) {
-      lock = candidate;
-      break;
-    }
+    if (await pathExists(path.join(root, candidate[1])))
+      foundLocks.push(candidate);
   }
-  const name = (
+  const validDeclared =
     declared && ["npm", "pnpm", "yarn", "bun"].includes(declared)
-      ? declared
-      : (lock?.[0] ?? "npm")
+      ? (declared as PackageManagerName)
+      : undefined;
+  if (foundLocks.length > 1 && !validDeclared && !options.installCommand) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      `Several package-manager lockfiles were found (${foundLocks.map((entry) => entry[1]).join(", ")}). Declare packageManager in package.json or provide --install-command.`,
+    );
+  }
+  const lock = validDeclared
+    ? foundLocks.find(([manager]) => manager === validDeclared)
+    : foundLocks[0];
+  const name = (
+    validDeclared ? validDeclared : (lock?.[0] ?? "npm")
   ) as PackageManagerName;
+  const warnings =
+    foundLocks.length > 1
+      ? [
+          `Multiple lockfiles detected; using ${lock?.[1] ?? `${name} conventions`} because ${validDeclared ? `packageManager declares ${validDeclared}` : "a custom install command was supplied"}.`,
+        ]
+      : [];
+  const workspaceType =
+    (await pathExists(path.join(root, "pnpm-workspace.yaml"))) ||
+    (await pathExists(path.join(root, "pnpm-workspace.yml")))
+      ? "pnpm"
+      : hasManifestWorkspaces
+        ? "package-json"
+        : "none";
+  const shared = {
+    lockfiles: foundLocks.map((entry) => entry[1]),
+    workspaceType,
+    warnings,
+  } as const;
   if (options.installCommand) {
     return {
       name,
       executable: name,
       installCommand: options.installCommand,
       installAfterManifestChange: options.installCommand,
+      ...shared,
       ...(lock ? { lockfile: lock[1] } : {}),
     };
   }
@@ -87,6 +123,7 @@ export async function detectPackageManager(
     executable: name,
     installCommand,
     installAfterManifestChange,
+    ...shared,
   };
   if (lock) result.lockfile = lock[1];
   return result;

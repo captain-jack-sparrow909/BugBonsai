@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { parseSync } from "oxc-parser";
 import {
   DeepSourceReducer,
+  DependencyReducer,
   FileTreeReducer,
+  JsonConfigReducer,
   TestStructureReducer,
 } from "../../src/reducers.js";
 
@@ -38,6 +40,7 @@ describe("structural reducers", () => {
       protectedPaths: new Set(),
       mode: "balanced",
       adapterMatches: [],
+      entryPaths: new Set(),
     });
     expect(mutations).toHaveLength(3);
     const descriptions = mutations.map((mutation) => mutation.description);
@@ -73,6 +76,7 @@ describe("structural reducers", () => {
       protectedPaths: new Set(["src/protected.js"]),
       mode: "balanced",
       adapterMatches: [],
+      entryPaths: new Set(["src/protected.js"]),
     });
     expect(
       mutations.some((mutation) =>
@@ -82,6 +86,35 @@ describe("structural reducers", () => {
     expect(
       mutations.some((mutation) => mutation.description.includes("under src")),
     ).toBe(false);
+  });
+
+  it("prioritizes dependencies absent from the source import graph", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "bugbonsai-deps-"));
+    created.push(root);
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        dependencies: {
+          "used-package": "1.0.0",
+          "unused-package": "1.0.0",
+        },
+      }),
+    );
+    await writeFile(
+      path.join(root, "entry.ts"),
+      'import "used-package";\nthrow new Error("bug");\n',
+    );
+
+    const mutations = await new DependencyReducer().discover({
+      root,
+      command: ["node", "entry.ts"],
+      protectedPaths: new Set(["entry.ts"]),
+      mode: "balanced",
+      adapterMatches: [],
+      entryPaths: new Set(["entry.ts"]),
+    });
+
+    expect(mutations[0]?.description).toContain("unused-package");
   });
 
   it("discovers parse-safe deep source candidates", async () => {
@@ -106,6 +139,7 @@ class Example { unused() { return 1; } keep() { return render(); } }
       protectedPaths: new Set(),
       mode: "thorough",
       adapterMatches: [],
+      entryPaths: new Set(),
     });
     const descriptions = mutations.map((mutation) => mutation.description);
     expect(
@@ -147,5 +181,46 @@ class Example { unused() { return 1; } keep() { return render(); } }
     await objectMutation?.apply(root);
     const reduced = await readFile(file, "utf8");
     expect(parseSync("component.tsx", reduced).errors).toHaveLength(0);
+  });
+
+  it("reduces nested JSONC properties and array elements without losing comments", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "bugbonsai-jsonc-"));
+    created.push(root);
+    const file = path.join(root, "tsconfig.json");
+    await writeFile(
+      file,
+      `{
+  // retain this project comment
+  "compilerOptions": {
+    "strict": true,
+    "plugins": [{ "name": "unused-plugin", "settings": { "noise": true } }]
+  },
+  "include": ["src", "unused"]
+}
+`,
+    );
+    const mutations = await new JsonConfigReducer().discover({
+      root,
+      command: ["tsc"],
+      protectedPaths: new Set(["tsconfig.json"]),
+      mode: "balanced",
+      adapterMatches: [],
+      entryPaths: new Set(),
+    });
+    expect(
+      mutations.some((mutation) =>
+        mutation.description.includes(
+          "compilerOptions.plugins[0].settings.noise",
+        ),
+      ),
+    ).toBe(true);
+    const arrayMutation = mutations.find((mutation) =>
+      mutation.description.includes("include[1]"),
+    );
+    expect(arrayMutation).toBeDefined();
+    await arrayMutation?.apply(root);
+    const reduced = await readFile(file, "utf8");
+    expect(reduced).toContain("retain this project comment");
+    expect(reduced).not.toContain('"unused"');
   });
 });

@@ -19,6 +19,10 @@
 - [x] Adaptive ddmin partition scheduling
 - [x] Persisted content-based rejected-candidate cache
 - [x] Thorough nested AST reduction for blocks, classes, switches, objects, arrays, and JSX
-- [x] Unit and end-to-end fixtures
+- [x] Recursive, comment-preserving JSON/JSONC property and array reduction
+- [x] Import-graph prioritization for unreachable files and unreferenced dependencies
+- [x] Ambiguous-lockfile rejection, workspace diagnostics, and lockfile refresh validation
+- [x] Real TypeScript, Vitest, Vite, and Jest fixtures
+- [x] Comparative reduction-quality and cache-effectiveness benchmark matrix
 - [ ] Preserve an in-progress reducer cursor across resume
 - [x] Packed-tarball validation and clean consumer installation

@@ -1,0 +1,7 @@
+{
+  "name": "bugbonsai-jest-real-fixture",
+  "private": true,
+  "devDependencies": {
+    "jest": "^30.0.0"
+  }
+}

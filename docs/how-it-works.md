@@ -2,6 +2,8 @@
 
 BugBonsai applies hierarchical delta debugging to a project copy. Reducers propose mutations such as removing a directory, a manifest field, a dependency, a JSON property, or an AST span. Each proposal is evaluated in a disposable candidate.
 
+Before file and dependency discovery, BugBonsai parses JavaScript, TypeScript, JSX, and TSX imports. Command paths, protected files, detected framework configuration, and normalized application stack frames seed a reachability graph. Unreachable files and packages never imported by parsed source receive higher impact scores, allowing the engine to remove likely noise sooner without treating static analysis as proof.
+
 A proposal is accepted only when the failure oracle finds compatible exit behavior, error identity, output tokens, and stack context. Accepted candidates become the next generation; rejected candidates are discarded. Execution is sequential so a result can never be accepted against a stale project generation.
 
 Before preparation and command execution, BugBonsai fingerprints the complete candidate tree. Rejections are cached against that content plus the command, baseline, oracle, version, invocation directory, and a one-way environment fingerprint. Cache entries contain only the rejection score and reason. Accepted outcomes are deliberately not cached: every accepted mutation must still execute the failure command.

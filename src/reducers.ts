@@ -1,9 +1,16 @@
 import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { applyEdits, modify, parse as parseJsonc } from "jsonc-parser";
+import {
+  applyEdits,
+  modify,
+  parseTree,
+  type Node as JsonNode,
+  type ParseError,
+} from "jsonc-parser";
 import MagicString from "magic-string";
 import { parseSync } from "oxc-parser";
 import type { AdapterMatch } from "./adapters.js";
+import { analyzeImportGraph } from "./import-graph.js";
 import { createInventory } from "./sandbox.js";
 import { sha256 } from "./utils.js";
 
@@ -23,6 +30,7 @@ export interface ReducerContext {
   protectedPaths: Set<string>;
   mode: "fast" | "balanced" | "thorough";
   adapterMatches: AdapterMatch[];
+  entryPaths: Set<string>;
 }
 
 export interface Reducer {
@@ -46,6 +54,11 @@ export class FileTreeReducer implements Reducer {
     const candidates = inventory.files.filter(
       (file) => !context.protectedPaths.has(file),
     );
+    const graph = await analyzeImportGraph(context.root, context.entryPaths);
+    const priority = (file: string): number =>
+      graph.sourceFiles.has(file) && !graph.reachableFiles.has(file)
+        ? 1_000_000_000
+        : 0;
     const topLevelCounts = new Map<string, number>();
     for (const file of inventory.files) {
       const top = file.split("/")[0] ?? file;
@@ -67,7 +80,11 @@ export class FileTreeReducer implements Reducer {
         id: mutationId(this.name, description),
         reducer: this.name,
         description,
-        estimatedImpact: files.length * 10_000,
+        estimatedImpact:
+          files.length * 10_000 +
+          (files.every((file) => !graph.reachableFiles.has(file))
+            ? 500_000_000
+            : 0),
         affectedPaths: files,
         requiresInstall: false,
         apply: async (root) => {
@@ -81,7 +98,8 @@ export class FileTreeReducer implements Reducer {
         id: mutationId(this.name, description),
         reducer: this.name,
         description,
-        estimatedImpact: (await stat(path.join(context.root, file))).size,
+        estimatedImpact:
+          priority(file) + (await stat(path.join(context.root, file))).size,
         affectedPaths: [file],
         requiresInstall: false,
         apply: async (root) => {
@@ -121,7 +139,15 @@ async function editJsonProperty(
       eol: source.includes("\r\n") ? "\r\n" : "\n",
     },
   });
-  await writeFile(file, applyEdits(source, edits));
+  const output = applyEdits(source, edits);
+  const errors: ParseError[] = [];
+  parseTree(output, errors, { allowTrailingComma: true });
+  if (errors.length > 0) {
+    throw new Error(
+      `JSON edit introduced ${errors.length} parser error${errors.length === 1 ? "" : "s"}.`,
+    );
+  }
+  await writeFile(file, output);
 }
 
 export class PackageJsonReducer implements Reducer {
@@ -193,6 +219,7 @@ export class DependencyReducer implements Reducer {
   async discover(context: ReducerContext): Promise<Mutation[]> {
     if (context.mode === "fast") return [];
     const mutations: Mutation[] = [];
+    const graph = await analyzeImportGraph(context.root, context.entryPaths);
     const inventory = await createInventory(context.root, {
       include: [],
       exclude: [],
@@ -222,7 +249,7 @@ export class DependencyReducer implements Reducer {
             id: mutationId(this.name, description),
             reducer: this.name,
             description,
-            estimatedImpact: 1_000,
+            estimatedImpact: graph.packageImports.has(name) ? 1_000 : 1_000_000,
             affectedPaths: [relative],
             requiresInstall: true,
             apply: async (root) =>
@@ -235,12 +262,104 @@ export class DependencyReducer implements Reducer {
         }
       }
     }
-    return mutations;
+    return mutations.sort(
+      (left, right) => right.estimatedImpact - left.estimatedImpact,
+    );
   }
 }
 
 const JSON_CONFIG_PATTERN =
   /(?:^|\/)(?:tsconfig(?:\.[^/]+)?|jsconfig|\.eslintrc|\.babelrc|jest\.config)\.jsonc?$/;
+
+interface JsonRemoval {
+  path: Array<string | number>;
+  estimatedImpact: number;
+  kind: "property" | "array element";
+  range: { start: number; end: number };
+}
+
+function jsonListRemovalRange(
+  source: string,
+  parent: JsonNode,
+  children: JsonNode[],
+  index: number,
+): { start: number; end: number } {
+  const child = children[index]!;
+  const next = children[index + 1];
+  if (next) {
+    const comma = source.indexOf(",", child.offset + child.length);
+    if (comma >= 0 && comma < next.offset)
+      return { start: child.offset, end: comma + 1 };
+  }
+  const previous = children[index - 1];
+  if (previous) {
+    const comma = source.lastIndexOf(",", child.offset);
+    if (comma >= previous.offset + previous.length)
+      return { start: comma, end: child.offset + child.length };
+  }
+  const trailingComma = source.indexOf(",", child.offset + child.length);
+  return {
+    start: child.offset,
+    end:
+      trailingComma >= 0 && trailingComma < parent.offset + parent.length
+        ? trailingComma + 1
+        : child.offset + child.length,
+  };
+}
+
+function collectJsonRemovals(
+  node: JsonNode,
+  currentPath: Array<string | number>,
+  removals: JsonRemoval[],
+  maximumDepth: number,
+  source: string,
+): void {
+  if (currentPath.length >= maximumDepth || removals.length >= 500) return;
+  if (node.type === "object") {
+    const properties = node.children ?? [];
+    for (const [index, property] of properties.entries()) {
+      const keyNode = property.children?.[0];
+      const valueNode = property.children?.[1];
+      if (typeof keyNode?.value !== "string" || !valueNode) continue;
+      const propertyPath = [...currentPath, keyNode.value];
+      removals.push({
+        path: propertyPath,
+        estimatedImpact: property.length,
+        kind: "property",
+        range: jsonListRemovalRange(source, node, properties, index),
+      });
+      collectJsonRemovals(
+        valueNode,
+        propertyPath,
+        removals,
+        maximumDepth,
+        source,
+      );
+    }
+  } else if (node.type === "array") {
+    const elements = node.children ?? [];
+    for (const [index, child] of elements.entries()) {
+      const elementPath = [...currentPath, index];
+      removals.push({
+        path: elementPath,
+        estimatedImpact: child.length,
+        kind: "array element",
+        range: jsonListRemovalRange(source, node, elements, index),
+      });
+      collectJsonRemovals(child, elementPath, removals, maximumDepth, source);
+    }
+  }
+}
+
+function formatJsonPath(parts: Array<string | number>): string {
+  return parts
+    .map((part, index) =>
+      typeof part === "number"
+        ? `[${part}]`
+        : `${index === 0 ? "" : "."}${part}`,
+    )
+    .join("");
+}
 
 export class JsonConfigReducer implements Reducer {
   readonly name = "json-config";
@@ -256,23 +375,54 @@ export class JsonConfigReducer implements Reducer {
       JSON_CONFIG_PATTERN.test(file),
     )) {
       const source = await readFile(path.join(context.root, relative), "utf8");
-      const data = parseJsonc(source) as Record<string, unknown> | undefined;
-      if (!data || typeof data !== "object") continue;
-      for (const field of Object.keys(data)) {
-        const description = `remove ${relative} field ${field}`;
+      const errors: ParseError[] = [];
+      const tree = parseTree(source, errors, { allowTrailingComma: true });
+      if (!tree || errors.length > 0) continue;
+      const removals: JsonRemoval[] = [];
+      collectJsonRemovals(
+        tree,
+        [],
+        removals,
+        context.mode === "fast" ? 1 : context.mode === "balanced" ? 5 : 10,
+        source,
+      );
+      for (const removal of removals) {
+        const renderedPath = formatJsonPath(removal.path);
+        const description = `remove ${relative} ${removal.kind} ${renderedPath}`;
         mutations.push({
           id: mutationId(this.name, description),
           reducer: this.name,
           description,
-          estimatedImpact: 300,
+          estimatedImpact: removal.estimatedImpact,
           affectedPaths: [relative],
           requiresInstall: false,
-          apply: async (root) =>
-            editJsonProperty(path.join(root, relative), [field], undefined),
+          apply: async (root) => {
+            const file = path.join(root, relative);
+            const current = await readFile(file, "utf8");
+            if (
+              current.slice(removal.range.start, removal.range.end) !==
+              source.slice(removal.range.start, removal.range.end)
+            ) {
+              throw new Error("JSON changed since mutation discovery.");
+            }
+            const editor = new MagicString(current);
+            editor.remove(removal.range.start, removal.range.end);
+            const output = editor.toString();
+            const outputErrors: ParseError[] = [];
+            parseTree(output, outputErrors, { allowTrailingComma: true });
+            if (outputErrors.length > 0) {
+              throw new Error(
+                `JSON edit introduced ${outputErrors.length} parser error${outputErrors.length === 1 ? "" : "s"}.`,
+              );
+            }
+            await writeFile(file, output);
+          },
         });
       }
     }
-    return mutations;
+    return mutations.sort(
+      (left, right) => right.estimatedImpact - left.estimatedImpact,
+    );
   }
 }
 

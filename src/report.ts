@@ -7,7 +7,13 @@ import { VERSION } from "./version.js";
 
 export async function writeReports(
   result: ReductionResult,
-  packageManager: { name: string; installCommand: string[] },
+  packageManager: {
+    name: string;
+    installCommand: string[];
+    lockfiles: string[];
+    workspaceType: string;
+    warnings: string[];
+  },
   options: { noInstall: boolean },
 ): Promise<void> {
   const markdown = `# Minimal reproduction
@@ -24,6 +30,7 @@ ${result.finalSignature.errorName ?? "Command failure"}${result.finalSignature.p
 - Architecture: ${os.arch()}
 - Node: ${process.version}
 - Package manager: ${packageManager.name}
+- Workspace: ${packageManager.workspaceType}
 
 ## Install
 
@@ -56,7 +63,7 @@ Generated BugBonsai report files are excluded from the project-file and size met
 
 ## Notes
 
-${result.portabilityFindings.length === 0 ? "No obvious portability problems were detected." : result.portabilityFindings.map((finding) => `- ${finding.path ? `${finding.path}: ` : ""}${finding.message}`).join("\n")}
+${[...(result.portabilityFindings.length === 0 ? ["No obvious portability problems were detected."] : result.portabilityFindings.map((finding) => `- ${finding.path ? `${finding.path}: ` : ""}${finding.message}`)), ...packageManager.warnings.map((warning) => `- Package manager: ${warning}`)].join("\n")}
 
 Detected adapters: ${result.detectedAdapters.length > 0 ? result.detectedAdapters.join(", ") : "generic"}.
 
@@ -73,6 +80,12 @@ BugBonsai uses heuristic failure matching and secret detection. Review the repro
       installCommand: options.noInstall ? null : packageManager.installCommand,
       invocationDirectory: result.invocationDirectory,
       detectedAdapters: result.detectedAdapters,
+      packageManager: {
+        name: packageManager.name,
+        workspaceType: packageManager.workspaceType,
+        lockfiles: packageManager.lockfiles,
+        warnings: packageManager.warnings,
+      },
       baseline: result.baseline,
       finalSignature: result.finalSignature,
       originalMetrics: result.originalMetrics,

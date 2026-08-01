@@ -244,6 +244,9 @@ async function doctor(
     packageManager: manager.name,
     packageManagerVersion: await commandVersion(manager.executable),
     lockfile: manager.lockfile ?? null,
+    lockfiles: manager.lockfiles,
+    workspaceType: manager.workspaceType,
+    packageManagerWarnings: manager.warnings,
     cacheDirectory: cacheRoot(),
     cacheWritable: cacheParentWritable,
   };

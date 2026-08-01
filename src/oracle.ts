@@ -204,7 +204,27 @@ export class DefaultFailureOracle implements FailureOracle {
         "The supplied command succeeded; BugBonsai needs a failing command.",
       );
     }
-    return createSignature(result);
+    const signature = createSignature(result);
+    if (
+      this.#options.exitCode !== undefined &&
+      signature.exitCode !== this.#options.exitCode
+    ) {
+      throw new Error(`Expected baseline exit code ${this.#options.exitCode}.`);
+    }
+    const normalized = signature.normalizedLines.join("\n");
+    if (this.#options.match && !normalized.includes(this.#options.match)) {
+      throw new Error(
+        `The baseline did not contain required text: ${this.#options.match}`,
+      );
+    }
+    if (this.#regex && !this.#regex.test(normalized)) {
+      this.#regex.lastIndex = 0;
+      throw new Error(
+        `The baseline did not match the required regular expression.`,
+      );
+    }
+    if (this.#regex) this.#regex.lastIndex = 0;
+    return signature;
   }
 
   async matches(

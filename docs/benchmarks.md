@@ -1,9 +1,17 @@
 # Benchmarks
 
-Run the deterministic built-in fixture benchmark:
+Run the deterministic built-in benchmark matrix:
 
 ```bash
 pnpm benchmark
 ```
 
-It reports elapsed time, candidate execution count, rejected-candidate cache hits, and original/final metrics. Results vary with hardware and Node version; the project does not publish performance claims without recording that environment.
+The matrix exercises a generic Node failure, a real TypeScript compiler failure, and a real Vitest assertion failure. For every scenario it reports elapsed time, candidate executions, rejected-candidate cache hits and hit rate, accepted transformations, file and byte reduction ratios, and original/final metrics. It also records Node, operating-system architecture, and CPU model.
+
+Use the matrix to detect regressions in three separate dimensions:
+
+- reduction quality: `fileReduction`, `byteReduction`, and final metrics;
+- execution cost: `durationMs` and `candidateRuns`;
+- avoided work: `cacheHits` and `cacheHitRate`.
+
+Results vary with hardware and Node version. The project does not publish performance claims without the emitted environment block and repeated measurements on a clean checkout.

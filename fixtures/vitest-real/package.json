@@ -1,0 +1,7 @@
+{
+  "name": "bugbonsai-vitest-real-fixture",
+  "private": true,
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  }
+}

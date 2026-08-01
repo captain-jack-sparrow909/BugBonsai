@@ -214,7 +214,8 @@ async function install(
   options: ResolvedOptions,
   afterManifestChange = false,
 ): Promise<void> {
-  if (options.noInstall || !(await projectHasDependencies(root))) return;
+  if (options.noInstall) return;
+  if (!afterManifestChange && !(await projectHasDependencies(root))) return;
   const result = await runCommand(
     afterManifestChange
       ? manager.installAfterManifestChange
@@ -230,6 +231,16 @@ async function install(
     throw new BugBonsaiError(
       "INTERNAL",
       `Dependency installation failed in the isolated workspace.\n${result.stderr || result.stdout}`,
+    );
+  }
+  if (
+    afterManifestChange &&
+    manager.lockfile &&
+    !(await pathExists(path.join(root, manager.lockfile)))
+  ) {
+    throw new BugBonsaiError(
+      "INTERNAL",
+      `Dependency installation removed the expected lockfile ${manager.lockfile}.`,
     );
   }
 }
@@ -479,6 +490,17 @@ function commandProjectPaths(options: ResolvedOptions): string[] {
   return paths;
 }
 
+function failureEntryPaths(baseline: FailureSignature): string[] {
+  return baseline.stackFrames
+    .map((frame) =>
+      frame.file
+        .replace(/^<PROJECT>\/?/, "")
+        .replace(/^\.\//, "")
+        .replaceAll("\\", "/"),
+    )
+    .filter((file) => file.length > 0 && !path.posix.isAbsolute(file));
+}
+
 async function reduceProjectInternal(
   input: ReductionOptions,
   initialCache: Record<string, CandidateCacheEntry> = {},
@@ -564,7 +586,7 @@ async function reduceProjectInternal(
         path.relative(options.root, options.cwd).replaceAll("\\", "/"),
         "package.json",
       ),
-      manager.lockfile ?? "",
+      ...manager.lockfiles,
       ...[
         "bugbonsai.config.mjs",
         "pnpm-workspace.yaml",
@@ -580,6 +602,10 @@ async function reduceProjectInternal(
         ),
       ),
     ]);
+    const entryPaths = new Set([
+      ...protectedPaths,
+      ...failureEntryPaths(baseline),
+    ]);
     for (const reducer of selectReducers(options)) {
       if (state.candidateRuns >= options.maxRuns) break;
       let productive = true;
@@ -593,6 +619,7 @@ async function reduceProjectInternal(
             protectedPaths,
             mode: options.mode,
             adapterMatches,
+            entryPaths,
           }),
           options.mode,
         );

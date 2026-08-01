@@ -26,6 +26,7 @@ BugBonsai is a local delta-debugging engine. It repeatedly removes project mater
 - `oracle`: normalization, structured signatures, and explainable matching.
 - `sandbox`: inventory, safe copy, containment, and session persistence.
 - `reducers`: hierarchical file, workspace manifest, JSON/JSONC, dependency, source, and nested test-structure pruning.
+- `import-graph`: conservative local-module reachability and package-import evidence used only for candidate ordering.
 - `ddmin`: deterministic coarse-to-fine compound mutation scheduling.
 - `cache`: content- and execution-fingerprinted rejected-candidate reuse; acceptances are never cached.
 - `adapters`: evidence-based TypeScript, Vitest, Jest, Vite, and Next.js detection and reduction hints.

@@ -2,7 +2,9 @@
 
 Reducers discover deterministic mutations against the current accepted candidate. Every mutation has a stable identifier, description, impact estimate, affected paths, and preparation requirement.
 
-File reductions begin with directories and proceed to individual files. Manifest and JSON reducers preserve valid syntax. Source reductions use Oxc spans and MagicString so they do not reprint or reformat complete files. Dependency reductions trigger a candidate-local install before the failure command runs.
+File reductions begin with directories and proceed to individual files. A conservative Oxc import graph makes source files unreachable from command, protected, configuration, and failure-stack entry paths the earliest file candidates. Package dependencies absent from every parsed source import are attempted before referenced packages. The graph only changes ordering; the failure oracle still decides every deletion.
+
+Manifest and recursive JSON/JSONC reducers preserve valid syntax and surrounding comments while removing nested object properties and array elements. Source reductions use Oxc spans and MagicString so they do not reprint or reformat complete files. Dependency reductions trigger a candidate-local install and lockfile refresh before the failure command runs.
 
 File, manifest, JSON configuration, and dependency candidates use deterministic coarse-to-fine partitions. BugBonsai starts with large removal groups, increases granularity after rejection, and rediscovers coarse partitions whenever a group succeeds. Individual candidates remain the final fallback.
 

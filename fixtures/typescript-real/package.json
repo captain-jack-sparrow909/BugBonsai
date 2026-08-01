@@ -1,0 +1,7 @@
+{
+  "name": "bugbonsai-typescript-real-fixture",
+  "private": true,
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

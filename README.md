@@ -46,7 +46,7 @@ Reproduction    9 files, 1.80 MB
 1. Inventory the source project without running its command.
 2. Copy it into an isolated session workspace.
 3. Capture the failure repeatedly to reject unstable baselines.
-4. Propose large removals before small ones.
+4. Build a conservative import graph and propose large, unreachable removals before small ones.
 5. Run the command after each mutation.
 6. Accept only mutations that match the structured failure oracle.
 7. Scan, freshly install, and revalidate the export.
@@ -142,8 +142,8 @@ The engine includes:
 - hierarchical directory and file pruning;
 - adaptive coarse-to-fine `ddmin` partitions for files, manifests, configuration, and dependencies;
 - `package.json` metadata and unused-script pruning;
-- direct dependency pruning with clean candidate installation;
-- JSON/JSONC top-level configuration pruning;
+- import-aware direct dependency pruning with clean candidate installation and lockfile refresh;
+- recursive JSON/JSONC object-property and array-element pruning;
 - conservative Oxc span-based top-level JavaScript, TypeScript, JSX, and TSX pruning;
 - thorough-mode function-block, branch, class-member, switch-case, object, array, and JSX pruning;
 - nested Vitest/Jest suite, test, hook, `.each`, `.skip`, and `.only` pruning;
@@ -155,7 +155,9 @@ Rejected candidates are cached by project content, command, oracle, normalized b
 
 ## Package managers
 
-npm and pnpm are the primary validated paths. Yarn and Bun are detected and have conservative install commands, but complex workspace and Plug'n'Play layouts require additional field validation.
+npm and pnpm are the primary validated paths. Package-manager declarations, every detected lockfile, and npm/pnpm workspace layouts are recorded in diagnostics and reports. If several package-manager lockfiles exist without an authoritative `packageManager` declaration, BugBonsai stops and asks for an explicit declaration or `--install-command` instead of guessing.
+
+Accepted dependency removals regenerate installation metadata in the isolated candidate and verify that the selected lockfile remains present. Yarn and Bun are detected and have conservative install commands, but complex workspace and Plug'n'Play layouts still require additional field validation.
 
 Dependency lifecycle scripts are disabled by default. Pass `--allow-install-scripts` only after reviewing the project’s dependencies.
 
@@ -186,7 +188,7 @@ console.log(result.outputDirectory);
 
 - Candidate execution is sequential for correctness.
 - Resume starts a continuation session from the last atomically accepted candidate and rediscovers reducer work; it does not preserve an in-progress reducer cursor.
-- Workspace installation and direct dependency pruning operate from an explicit root; package-manager-specific workspace edge cases remain conservative.
+- Workspace installation and direct dependency pruning operate from an explicit root; Yarn Plug'n'Play, Bun workspaces, catalogs, and package-manager-specific patch/protocol edge cases remain conservative.
 - BugBonsai isolates project files, not network or external-service side effects.
 - Failure and secret matching are heuristic and intentionally favor false rejection over preserving the wrong failure.
 

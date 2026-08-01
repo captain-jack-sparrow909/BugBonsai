@@ -60,6 +60,14 @@ describe("CustomFailureOracle", () => {
 });
 
 describe("DefaultFailureOracle", () => {
+  it("rejects a baseline that does not satisfy an explicit match", async () => {
+    const oracle = new DefaultFailureOracle({ match: "EXPECTED_SENTINEL" });
+
+    await expect(
+      oracle.capture(result("Error: a different failure")),
+    ).rejects.toThrow(/baseline did not contain required text/i);
+  });
+
   it("accepts the same failure after line drift", async () => {
     const oracle = new DefaultFailureOracle();
     const baseline = await oracle.capture(

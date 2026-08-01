@@ -1,0 +1,7 @@
+{
+  "name": "bugbonsai-vite-real-fixture",
+  "private": true,
+  "devDependencies": {
+    "vite": "^8.2.0"
+  }
+}

@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { reduceProject } from "../../src/engine.js";
+import { runCommand } from "../../src/process.js";
 
 describe("dependency reducer", () => {
   it("removes an unused direct dependency and refreshes installation metadata", async () => {
@@ -38,6 +39,18 @@ describe("dependency reducer", () => {
     );
     process.env.BUGBONSAI_CACHE_DIR = path.join(temporary, "cache");
     process.env.npm_config_cache = path.join(temporary, "npm-cache");
+    const lockResult = await runCommand(
+      [
+        "npm",
+        "install",
+        "--package-lock-only",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+      ],
+      { cwd: project, timeoutMs: 60_000, verbose: false },
+    );
+    expect(lockResult.exitCode).toBe(0);
     const output = path.join(temporary, "repro");
     const result = await reduceProject({
       cwd: project,
@@ -56,6 +69,12 @@ describe("dependency reducer", () => {
     };
     expect(manifest.dependencies ?? {}).not.toHaveProperty(
       "unused-local-package",
+    );
+    const lock = JSON.parse(
+      await readFile(path.join(output, "package-lock.json"), "utf8"),
+    ) as { packages?: Record<string, unknown> };
+    expect(lock.packages ?? {}).not.toHaveProperty(
+      "node_modules/unused-local-package",
     );
     expect(
       result.attempts.some(
