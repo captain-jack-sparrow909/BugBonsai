@@ -8,7 +8,7 @@ BugBonsai turns a failing JavaScript or TypeScript project into a small, shareab
 npx bugbonsai -- npm test
 ```
 
-BugBonsai is local-first, deterministic, resumable at accepted candidate boundaries, and deliberately conservative. It never uploads source code or modifies existing files in the source project. Even baseline commands run inside disposable workspaces.
+BugBonsai is local-first, deterministic, durably resumable at command boundaries, and deliberately conservative. It never uploads source code or modifies existing files in the source project. Even baseline commands run inside disposable workspaces.
 
 ## Thirty-second quick start
 
@@ -50,6 +50,8 @@ Reproduction    9 files, 1.80 MB
 5. Run the command after each mutation.
 6. Accept only mutations that match the structured failure oracle.
 7. Scan, freshly install, and revalidate the export.
+
+After every candidate, BugBonsai atomically persists the current reducer, generation, deterministic mutation schedule, next mutation, cache, elapsed time, dependency snapshot, and consumed run budget. `bugbonsai resume` continues the same run rather than creating a replacement session or repeating completed candidates.
 
 The result is the smallest practical reproduction BugBonsai found within the configured run budget. It is not a mathematical guarantee of the global minimum.
 
@@ -153,6 +155,8 @@ The engine includes:
 
 Rejected candidates are cached by project content, command, oracle, normalized baseline, BugBonsai version, and a one-way environment fingerprint. A cache hit can skip a known rejection, but cached results are never used to accept a mutation.
 
+Dependency candidates begin from a private copy of the last verified `node_modules` snapshot before the package manager refreshes it. This avoids rebuilding every candidate from an empty installation while ensuring mutations cannot modify the shared accepted snapshot.
+
 ## Package managers
 
 npm and pnpm are the primary validated paths. Package-manager declarations, every detected lockfile, and npm/pnpm workspace layouts are recorded in diagnostics and reports. If several package-manager lockfiles exist without an authoritative `packageManager` declaration, BugBonsai stops and asks for an explicit declaration or `--install-command` instead of guessing.
@@ -187,7 +191,6 @@ console.log(result.outputDirectory);
 ## Current limitations
 
 - Candidate execution is sequential for correctness.
-- Resume starts a continuation session from the last atomically accepted candidate and rediscovers reducer work; it does not preserve an in-progress reducer cursor.
 - Workspace installation and direct dependency pruning operate from an explicit root; Yarn Plug'n'Play, Bun workspaces, catalogs, and package-manager-specific patch/protocol edge cases remain conservative.
 - BugBonsai isolates project files, not network or external-service side effects.
 - Failure and secret matching are heuristic and intentionally favor false rejection over preserving the wrong failure.

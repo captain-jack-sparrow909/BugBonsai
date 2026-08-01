@@ -175,8 +175,18 @@ function commandLine(command: string[]): string {
 function humanProgress(event: ProgressEvent): void {
   if (event.phase === "reduce") {
     const icon = event.accepted ? pc.green("✓") : pc.dim("·");
+    const budget =
+      event.runs !== undefined && event.maxRuns !== undefined
+        ? pc.dim(` [${event.runs}/${event.maxRuns} runs]`)
+        : "";
+    const eta =
+      event.etaMs !== undefined && event.etaMs > 0
+        ? pc.dim(
+            ` [budget ETA ~${event.etaMs < 60_000 ? `${Math.max(1, Math.round(event.etaMs / 1000))}s` : `${Math.max(1, Math.round(event.etaMs / 60_000))}m`}]`,
+          )
+        : "";
     process.stderr.write(
-      `${icon} ${event.message}${event.accepted ? "" : pc.dim(" — rejected")}\n`,
+      `${icon} ${event.message}${event.accepted ? "" : pc.dim(" — rejected")}${budget}${eta}\n`,
     );
     return;
   }
@@ -289,7 +299,7 @@ async function resumeRun(runId?: string, json = false): Promise<void> {
   process.once("SIGTERM", interrupt);
   if (!json) {
     process.stderr.write(
-      `${pc.green("🌱")} ${pc.bold("BugBonsai")}\n\nResuming ${selected.state.runId} from accepted generation ${selected.state.generation}.\n\n`,
+      `${pc.green("🌱")} ${pc.bold("BugBonsai")}\n\nResuming ${selected.state.runId} from accepted generation ${selected.state.generation}, reducer ${selected.state.cursor.reducerIndex + 1}, mutation ${selected.state.cursor.nextMutationIndex + 1}. ${Math.max(0, selected.state.options.maxRuns - selected.state.candidateRuns)} candidate runs remain.\n\n`,
     );
   }
   const result = await resumeProject(selected.state.runId, {

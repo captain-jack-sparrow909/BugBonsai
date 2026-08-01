@@ -56,6 +56,7 @@ The command fails with the failure described above.
 
 - Candidate executions: ${result.candidateRuns}
 - Cached candidate rejections: ${result.cacheHits}
+- Dependency snapshots reused: ${result.attempts.filter((attempt) => attempt.dependencySnapshotReused).length}
 - Accepted transformations: ${result.attempts.filter((attempt) => attempt.accepted).length}
 - Duration: ${(result.durationMs / 1000).toFixed(1)} seconds
 
@@ -92,6 +93,9 @@ BugBonsai uses heuristic failure matching and secret detection. Review the repro
       finalMetrics: result.finalMetrics,
       candidateRuns: result.candidateRuns,
       cacheHits: result.cacheHits,
+      dependencySnapshotsReused: result.attempts.filter(
+        (attempt) => attempt.dependencySnapshotReused,
+      ).length,
       acceptedMutations: result.attempts.filter((attempt) => attempt.accepted),
       rejectedAttemptCount: result.attempts.filter(
         (attempt) => !attempt.accepted,

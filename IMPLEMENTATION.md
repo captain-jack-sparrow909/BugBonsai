@@ -5,7 +5,7 @@
 - [x] Command execution and cancellation
 - [x] Failure normalization and oracle
 - [x] Safe inventory and isolated workspaces
-- [x] Versioned session snapshots and continuation from the last accepted state
+- [x] Versioned session snapshots and exact same-run scheduler continuation
 - [x] Hierarchical reduction engine
 - [x] File, manifest, dependency, JSON, and source reducers
 - [x] npm and pnpm preparation
@@ -24,5 +24,8 @@
 - [x] Ambiguous-lockfile rejection, workspace diagnostics, and lockfile refresh validation
 - [x] Real TypeScript, Vitest, Vite, and Jest fixtures
 - [x] Comparative reduction-quality and cache-effectiveness benchmark matrix
-- [ ] Preserve an in-progress reducer cursor across resume
+- [x] Preserve reducer, generation, schedule, mutation cursor, and run budget across resume
+- [x] Reuse private copies of accepted dependency installation snapshots
+- [x] Run-budget progress and duration-derived ETA events
+- [x] Inventory, baseline, reduction, and final-validation interruption tests
 - [x] Packed-tarball validation and clean consumer installation

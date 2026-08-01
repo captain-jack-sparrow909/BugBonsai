@@ -6,7 +6,7 @@ BugBonsai is a local delta-debugging engine. It repeatedly removes project mater
 
 1. Existing files in the source project are never modified. Baseline commands run in disposable workspaces.
 2. A non-zero exit code alone never proves failure equivalence.
-3. Every accepted mutation is persisted before the next reduction begins.
+3. Every candidate outcome and its next deterministic scheduler cursor are persisted before progress is reported or the next reduction begins.
 4. Raw environment values and unredacted command output are not persisted.
 5. Candidate evaluation is sequential. This avoids accepting incompatible mutations from stale candidate generations.
 6. The sanitized export is installed and verified from a fresh directory before success is reported.
@@ -29,6 +29,7 @@ BugBonsai is a local delta-debugging engine. It repeatedly removes project mater
 - `import-graph`: conservative local-module reachability and package-import evidence used only for candidate ordering.
 - `ddmin`: deterministic coarse-to-fine compound mutation scheduling.
 - `cache`: content- and execution-fingerprinted rejected-candidate reuse; acceptances are never cached.
+- `session scheduler`: schema-versioned reducer cursor, cumulative run budget, elapsed time, and dependency-snapshot pointer for same-run continuation.
 - `adapters`: evidence-based TypeScript, Vitest, Jest, Vite, and Next.js detection and reduction hints.
 - `config`: validated project-local defaults and trusted custom-oracle selection.
 - `core`: orchestration and acceptance policy.

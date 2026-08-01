@@ -78,7 +78,10 @@ describe("dependency reducer", () => {
     );
     expect(
       result.attempts.some(
-        (attempt) => attempt.reducer === "dependencies" && attempt.accepted,
+        (attempt) =>
+          attempt.reducer === "dependencies" &&
+          attempt.accepted &&
+          attempt.dependencySnapshotReused,
       ),
     ).toBe(true);
     await rm(temporary, { recursive: true, force: true });

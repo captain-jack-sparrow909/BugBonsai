@@ -81,6 +81,10 @@ export interface ProgressEvent {
   reducer?: string;
   accepted?: boolean;
   runs?: number;
+  maxRuns?: number;
+  remainingRuns?: number;
+  progress?: number;
+  etaMs?: number;
 }
 
 export interface ProjectMetrics {
@@ -98,6 +102,7 @@ export interface ReductionAttempt {
   reason: string;
   durationMs: number;
   cached?: boolean;
+  dependencySnapshotReused?: boolean;
 }
 
 export interface SecurityFinding {
@@ -162,8 +167,16 @@ export interface ResolvedOptions extends Required<
   onProgress?: (event: ProgressEvent) => void;
 }
 
+export interface ReductionCursor {
+  reducerIndex: number;
+  reducerName?: string;
+  generation: number;
+  scheduleIds: string[];
+  nextMutationIndex: number;
+}
+
 export interface RunState {
-  schemaVersion: 3;
+  schemaVersion: 4;
   runId: string;
   projectRoot: string;
   invocationCwd: string;
@@ -178,6 +191,10 @@ export interface RunState {
   cacheHits: number;
   cache: Record<string, CandidateCacheEntry>;
   generation: number;
+  cursor: ReductionCursor;
+  elapsedMs: number;
+  originalMetrics?: ProjectMetrics;
+  dependencySnapshot?: string;
   currentMetrics?: ProjectMetrics;
   outputDirectory?: string;
 }

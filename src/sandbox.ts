@@ -244,21 +244,48 @@ export async function loadState(session: string): Promise<RunState> {
     const legacyOptions = raw.options as Record<string, unknown>;
     return {
       ...raw,
-      schemaVersion: 3,
+      schemaVersion: 4,
       options: { ...legacyOptions, root: raw.projectRoot },
       cacheHits: 0,
       cache: {},
+      cursor: {
+        reducerIndex: 0,
+        generation: Number(raw.generation ?? 0),
+        scheduleIds: [],
+        nextMutationIndex: 0,
+      },
+      elapsedMs: 0,
     } as unknown as RunState;
   }
   if (raw.schemaVersion === 2) {
     return {
       ...raw,
-      schemaVersion: 3,
+      schemaVersion: 4,
       cacheHits: 0,
       cache: {},
+      cursor: {
+        reducerIndex: 0,
+        generation: Number(raw.generation ?? 0),
+        scheduleIds: [],
+        nextMutationIndex: 0,
+      },
+      elapsedMs: 0,
     } as unknown as RunState;
   }
-  if (raw.schemaVersion !== 3)
+  if (raw.schemaVersion === 3) {
+    return {
+      ...raw,
+      schemaVersion: 4,
+      cursor: {
+        reducerIndex: 0,
+        generation: Number(raw.generation ?? 0),
+        scheduleIds: [],
+        nextMutationIndex: 0,
+      },
+      elapsedMs: 0,
+    } as unknown as RunState;
+  }
+  if (raw.schemaVersion !== 4)
     throw new Error(`Unsupported session schema: ${String(raw.schemaVersion)}`);
   return raw as unknown as RunState;
 }

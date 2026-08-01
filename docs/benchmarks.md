@@ -13,5 +13,6 @@ Use the matrix to detect regressions in three separate dimensions:
 - reduction quality: `fileReduction`, `byteReduction`, and final metrics;
 - execution cost: `durationMs` and `candidateRuns`;
 - avoided work: `cacheHits` and `cacheHitRate`.
+- dependency preparation reuse: `dependencySnapshotsReused`.
 
 Results vary with hardware and Node version. The project does not publish performance claims without the emitted environment block and repeated measurements on a clean checkout.

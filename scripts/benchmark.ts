@@ -32,6 +32,9 @@ try {
           ? 0
           : Number((result.cacheHits / attemptedExecutions).toFixed(3)),
       acceptedMutations: accepted,
+      dependencySnapshotsReused: result.attempts.filter(
+        (attempt) => attempt.dependencySnapshotReused,
+      ).length,
       fileReduction: Number(
         (
           1 -

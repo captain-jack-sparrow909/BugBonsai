@@ -138,11 +138,7 @@ export async function resumeProject(
     );
   }
 
-  // Resume from the last atomically accepted candidate in a continuation
-  // session. Reducer cursor state is rediscovered, while content-addressed
-  // rejected-candidate entries carry forward without coupling future versions
-  // to the internal ordering of reducer implementations.
-  const result = await reduceProjectInternal(
+  return reduceProjectInternal(
     {
       ...state.options,
       root: best,
@@ -156,11 +152,13 @@ export async function resumeProject(
       ...(runtime.verbose !== undefined ? { verbose: runtime.verbose } : {}),
     },
     state.cache,
+    { session, state },
   );
-  state.status = "completed";
-  state.outputDirectory = result.outputDirectory;
-  await saveState(session, state);
-  return result;
+}
+
+interface ResumeContext {
+  session: string;
+  state: RunState;
 }
 
 function serializableOptions(
@@ -175,6 +173,40 @@ function emit(
   event: Parameters<NonNullable<ResolvedOptions["onProgress"]>>[0],
 ): void {
   options.onProgress?.(event);
+}
+
+function progressDetails(
+  state: RunState,
+  options: ResolvedOptions,
+): Pick<
+  NonNullable<Parameters<NonNullable<ResolvedOptions["onProgress"]>>[0]>,
+  "runs" | "maxRuns" | "remainingRuns" | "progress" | "etaMs"
+> {
+  const remainingRuns = Math.max(0, options.maxRuns - state.candidateRuns);
+  const measured = state.attempts.filter(
+    (attempt) => !attempt.cached && attempt.durationMs > 0,
+  );
+  const averageMs =
+    measured.length === 0
+      ? undefined
+      : measured.reduce((total, attempt) => total + attempt.durationMs, 0) /
+        measured.length;
+  return {
+    runs: state.candidateRuns,
+    maxRuns: options.maxRuns,
+    remainingRuns,
+    progress: Number(
+      Math.min(1, state.candidateRuns / options.maxRuns).toFixed(4),
+    ),
+    ...(averageMs === undefined
+      ? {}
+      : { etaMs: Math.round(averageMs * remainingRuns) }),
+  };
+}
+
+function throwIfAborted(options: ResolvedOptions): void {
+  if (options.signal?.aborted)
+    throw new BugBonsaiError("INTERRUPTED", "Reduction was interrupted.");
 }
 
 async function projectHasDependencies(root: string): Promise<boolean> {
@@ -268,6 +300,7 @@ async function captureBaseline(
 ): Promise<FailureSignature> {
   let baseline: FailureSignature | undefined;
   for (let run = 0; run < options.stabilityRuns; run += 1) {
+    throwIfAborted(options);
     const candidate = path.join(scratch, `baseline-${run}`);
     await copyProject(best, candidate);
     const result = await executeWithDependencies(
@@ -275,6 +308,7 @@ async function captureBaseline(
       dependencies,
       options,
     );
+    throwIfAborted(options);
     if (!baseline) {
       try {
         baseline = await oracle.capture(result);
@@ -326,6 +360,7 @@ async function evaluateMutation(input: {
   attempt: ReductionAttempt;
   signature: FailureSignature;
   candidateDependencies?: string;
+  dependencyPreparationChanged?: boolean;
   cacheKey: string;
   cacheHit: boolean;
 }> {
@@ -354,7 +389,16 @@ async function evaluateMutation(input: {
     };
   }
   let candidateDependencies: string | undefined;
+  let dependencySnapshotReused = false;
   if (input.mutation.requiresInstall) {
+    if (await pathExists(input.dependencies)) {
+      await copyProject(
+        input.dependencies,
+        path.join(input.candidate, "node_modules"),
+        { includeNodeModules: true },
+      );
+      dependencySnapshotReused = true;
+    }
     await install(input.candidate, input.manager, input.options, true);
     const installed = path.join(input.candidate, "node_modules");
     if (await pathExists(installed)) candidateDependencies = installed;
@@ -370,6 +414,7 @@ async function evaluateMutation(input: {
     verbose: input.options.verbose,
     ...(input.options.signal ? { signal: input.options.signal } : {}),
   });
+  throwIfAborted(input.options);
   const match = await input.oracle.matches(input.baseline, result);
   return {
     attempt: {
@@ -380,10 +425,14 @@ async function evaluateMutation(input: {
       score: match.score,
       reason: match.reason,
       durationMs: Math.round(performance.now() - started),
+      ...(dependencySnapshotReused ? { dependencySnapshotReused: true } : {}),
     },
     signature: match.signature,
     cacheKey,
     cacheHit: false,
+    ...(input.mutation.requiresInstall
+      ? { dependencyPreparationChanged: true }
+      : {}),
     ...(candidateDependencies ? { candidateDependencies } : {}),
   };
 }
@@ -504,19 +553,22 @@ function failureEntryPaths(baseline: FailureSignature): string[] {
 async function reduceProjectInternal(
   input: ReductionOptions,
   initialCache: Record<string, CandidateCacheEntry> = {},
+  resume?: ResumeContext,
 ): Promise<ReductionResult> {
   const started = performance.now();
   const options = resolveOptions(input);
-  const runId = createRunId();
-  const session = await createSession(runId);
+  const runId = resume?.state.runId ?? createRunId();
+  const session = resume?.session ?? (await createSession(runId));
   const seed = path.join(session, "seed");
   const best = path.join(session, "best");
   const scratch = path.join(session, "scratch");
-  let dependencies = path.join(session, "dependencies");
+  let dependencies = resume?.state.dependencySnapshot
+    ? path.join(session, resume.state.dependencySnapshot)
+    : path.join(session, "dependencies");
   await mkdir(scratch, { recursive: true });
 
-  const state: RunState = {
-    schemaVersion: 3,
+  const state: RunState = resume?.state ?? {
+    schemaVersion: 4,
     runId,
     projectRoot: options.root,
     invocationCwd: options.cwd,
@@ -530,7 +582,16 @@ async function reduceProjectInternal(
     cacheHits: 0,
     cache: { ...initialCache },
     generation: 0,
+    cursor: {
+      reducerIndex: 0,
+      generation: 0,
+      scheduleIds: [],
+      nextMutationIndex: 0,
+    },
+    elapsedMs: 0,
   };
+  const elapsedBeforeTurn = state.elapsedMs;
+  let exportCreated = false;
   await saveState(session, state);
 
   try {
@@ -539,24 +600,35 @@ async function reduceProjectInternal(
       message: "Creating isolated project inventory",
     });
     const inventory = await createInventory(options.root, options);
-    await copyInventory(inventory, seed);
-    const originalMetrics = await metrics(seed);
-    const manager = await detectPackageManager(seed, options);
+    if (!resume) await copyInventory(inventory, seed);
+    const workingRoot = resume ? best : seed;
+    const originalMetrics =
+      state.originalMetrics ?? (await metrics(workingRoot));
+    state.originalMetrics = originalMetrics;
+    const manager = await detectPackageManager(workingRoot, options);
     const invocationDirectory = path
       .relative(options.root, options.cwd)
       .replaceAll("\\", "/");
     const adapterMatches = await detectAdapters({
-      root: seed,
+      root: workingRoot,
       invocationDirectory,
       command: options.command,
     });
-    await install(seed, manager, options);
-    const installed = path.join(seed, "node_modules");
-    if (await pathExists(installed)) await rename(installed, dependencies);
-    await copyProject(seed, best);
+    if (!resume) {
+      await install(seed, manager, options);
+      const installed = path.join(seed, "node_modules");
+      if (await pathExists(installed)) {
+        await rename(installed, dependencies);
+        state.dependencySnapshot = path.relative(session, dependencies);
+      }
+      await copyProject(seed, best);
+    }
     state.status = "running";
-    state.currentMetrics = originalMetrics;
+    state.currentMetrics = resume
+      ? (state.currentMetrics ?? (await metrics(best)))
+      : originalMetrics;
     await saveState(session, state);
+    throwIfAborted(options);
 
     const oracleOptions = {
       ...(options.match ? { match: options.match } : {}),
@@ -566,13 +638,9 @@ async function reduceProjectInternal(
     const oracle: FailureOracle = options.oraclePath
       ? await loadCustomOracle(options.oraclePath, options.cwd, oracleOptions)
       : new DefaultFailureOracle(oracleOptions);
-    const baseline = await captureBaseline(
-      best,
-      dependencies,
-      scratch,
-      options,
-      oracle,
-    );
+    const baseline =
+      state.baseline ??
+      (await captureBaseline(best, dependencies, scratch, options, oracle));
     state.baseline = baseline;
     await saveState(session, state);
     const executionFingerprint = await createExecutionFingerprint(
@@ -606,10 +674,31 @@ async function reduceProjectInternal(
       ...protectedPaths,
       ...failureEntryPaths(baseline),
     ]);
-    for (const reducer of selectReducers(options)) {
+    const reducers = selectReducers(options);
+    reduction: for (
+      let reducerIndex = state.cursor.reducerIndex;
+      reducerIndex < reducers.length;
+      reducerIndex += 1
+    ) {
       if (state.candidateRuns >= options.maxRuns) break;
+      const reducer = reducers[reducerIndex];
+      if (!reducer) break;
+      if (
+        state.cursor.reducerIndex !== reducerIndex ||
+        state.cursor.reducerName !== reducer.name
+      ) {
+        state.cursor = {
+          reducerIndex,
+          reducerName: reducer.name,
+          generation: state.generation,
+          scheduleIds: [],
+          nextMutationIndex: 0,
+        };
+        await saveState(session, state);
+      }
       let productive = true;
       while (productive && state.candidateRuns < options.maxRuns) {
+        throwIfAborted(options);
         productive = false;
         const mutations = scheduleMutations(
           reducer,
@@ -623,13 +712,39 @@ async function reduceProjectInternal(
           }),
           options.mode,
         );
-        for (const mutation of mutations) {
-          if (state.candidateRuns >= options.maxRuns) break;
-          if (options.signal?.aborted)
-            throw new BugBonsaiError(
-              "INTERRUPTED",
-              "Reduction was interrupted.",
-            );
+        if (state.cursor.generation !== state.generation) {
+          state.cursor = {
+            reducerIndex,
+            reducerName: reducer.name,
+            generation: state.generation,
+            scheduleIds: [],
+            nextMutationIndex: 0,
+          };
+        }
+        if (state.cursor.scheduleIds.length === 0) {
+          state.cursor.scheduleIds = mutations.map((mutation) => mutation.id);
+          state.cursor.nextMutationIndex = 0;
+          await saveState(session, state);
+        }
+        const mutationsById = new Map(
+          mutations.map((mutation) => [mutation.id, mutation]),
+        );
+        let accepted = false;
+        while (
+          state.cursor.nextMutationIndex < state.cursor.scheduleIds.length
+        ) {
+          if (state.candidateRuns >= options.maxRuns) break reduction;
+          throwIfAborted(options);
+          const mutationId =
+            state.cursor.scheduleIds[state.cursor.nextMutationIndex];
+          const mutation = mutationId
+            ? mutationsById.get(mutationId)
+            : undefined;
+          if (!mutation) {
+            state.cursor.nextMutationIndex += 1;
+            await saveState(session, state);
+            continue;
+          }
           const candidate = path.join(
             scratch,
             `candidate-${state.attempts.length + 1}`,
@@ -649,6 +764,7 @@ async function reduceProjectInternal(
               executionFingerprint,
             });
           } catch (error) {
+            if (options.signal?.aborted) throw error;
             evaluation = {
               attempt: {
                 mutationId: mutation.id,
@@ -677,32 +793,66 @@ async function reduceProjectInternal(
             );
           }
           state.attempts.push(evaluation.attempt);
-          emit(options, {
-            phase: "reduce",
-            message: `${evaluation.attempt.description}${evaluation.cacheHit ? " (cached)" : ""}`,
-            reducer: reducer.name,
-            accepted: evaluation.attempt.accepted,
-            runs: state.candidateRuns,
-          });
           if (evaluation.attempt.accepted) {
-            if (evaluation.candidateDependencies) {
-              const nextDependencies = path.join(
-                session,
-                `dependencies-${state.generation + 1}`,
-              );
-              await rename(evaluation.candidateDependencies, nextDependencies);
-              dependencies = nextDependencies;
+            if (evaluation.dependencyPreparationChanged) {
+              if (evaluation.candidateDependencies) {
+                const nextDependencies = path.join(
+                  session,
+                  `dependencies-${state.generation + 1}`,
+                );
+                await rename(
+                  evaluation.candidateDependencies,
+                  nextDependencies,
+                );
+                dependencies = nextDependencies;
+                state.dependencySnapshot = path.relative(session, dependencies);
+              } else {
+                dependencies = path.join(session, "dependencies-empty");
+                delete state.dependencySnapshot;
+              }
             }
             await promoteCandidate(best, candidate);
             state.generation += 1;
             state.currentMetrics = await metrics(best);
+            state.cursor = {
+              reducerIndex,
+              reducerName: reducer.name,
+              generation: state.generation,
+              scheduleIds: [],
+              nextMutationIndex: 0,
+            };
             productive = true;
             await saveState(session, state);
+            emit(options, {
+              phase: "reduce",
+              message: `${evaluation.attempt.description}${evaluation.cacheHit ? " (cached)" : ""}`,
+              reducer: reducer.name,
+              accepted: true,
+              ...progressDetails(state, options),
+            });
+            accepted = true;
             break;
           }
           await rm(candidate, { recursive: true, force: true });
+          state.cursor.nextMutationIndex += 1;
           await saveState(session, state);
+          emit(options, {
+            phase: "reduce",
+            message: `${evaluation.attempt.description}${evaluation.cacheHit ? " (cached)" : ""}`,
+            reducer: reducer.name,
+            accepted: false,
+            ...progressDetails(state, options),
+          });
         }
+        if (accepted) continue;
+        if (state.candidateRuns >= options.maxRuns) break reduction;
+        state.cursor = {
+          reducerIndex: reducerIndex + 1,
+          generation: state.generation,
+          scheduleIds: [],
+          nextMutationIndex: 0,
+        };
+        await saveState(session, state);
       }
     }
 
@@ -710,6 +860,7 @@ async function reduceProjectInternal(
       phase: "validate",
       message: "Scanning and validating fresh reproduction",
     });
+    throwIfAborted(options);
     const preExportSecurity = await scanSecurity(best);
     const blocking = preExportSecurity;
     if (blocking.length > 0) {
@@ -724,17 +875,20 @@ async function reduceProjectInternal(
         `Output path already exists: ${options.output}`,
       );
     await copyProject(best, options.output);
+    exportCreated = true;
     const validation = path.join(scratch, "final-validation");
     await copyProject(options.output, validation);
     await install(validation, manager, options);
     let finalSignature = baseline;
     for (let run = 0; run < options.finalRuns; run += 1) {
+      throwIfAborted(options);
       const result = await runCommand(options.command, {
         cwd: path.join(validation, path.relative(options.root, options.cwd)),
         timeoutMs: options.timeoutMs,
         verbose: options.verbose,
         ...(options.signal ? { signal: options.signal } : {}),
       });
+      throwIfAborted(options);
       const match = await oracle.matches(baseline, result);
       if (!match.matches)
         throw new BugBonsaiError(
@@ -746,10 +900,14 @@ async function reduceProjectInternal(
         phase: "validate",
         message: `Final failure reproduced ${run + 1}/${options.finalRuns}`,
       });
+      throwIfAborted(options);
     }
     const finalMetrics = await metrics(options.output);
     const securityFindings = await scanSecurity(options.output);
     const portabilityFindings = await auditPortability(options.output);
+    const durationMs = Math.round(
+      elapsedBeforeTurn + performance.now() - started,
+    );
     const result: ReductionResult = {
       runId,
       outputDirectory: options.output,
@@ -763,7 +921,7 @@ async function reduceProjectInternal(
       attempts: state.attempts,
       candidateRuns: state.candidateRuns,
       cacheHits: state.cacheHits,
-      durationMs: Math.round(performance.now() - started),
+      durationMs,
       securityFindings,
       portabilityFindings,
     };
@@ -771,11 +929,20 @@ async function reduceProjectInternal(
     state.status = "completed";
     state.outputDirectory = options.output;
     state.currentMetrics = finalMetrics;
+    state.elapsedMs = durationMs;
     await saveState(session, state);
     emit(options, { phase: "complete", message: options.output });
     return result;
   } catch (error) {
+    state.elapsedMs = Math.round(
+      elapsedBeforeTurn + performance.now() - started,
+    );
     state.status = options.signal?.aborted ? "paused" : "failed";
+    if (options.signal?.aborted && exportCreated) {
+      await rm(options.output, { recursive: true, force: true }).catch(
+        () => undefined,
+      );
+    }
     await saveState(session, state).catch(() => undefined);
     if (options.signal?.aborted)
       throw new BugBonsaiError(
