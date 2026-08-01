@@ -42,4 +42,10 @@ describe("BugBonsai configuration", () => {
       /outputMode/,
     );
   });
+
+  it("disables both source depths through the source reducer switch", () => {
+    expect(
+      validateConfig({ reducers: { source: false } }).skipReducers,
+    ).toEqual(["source", "deep-source"]);
+  });
 });

@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { minimatch } from "minimatch";
 import { detectAdapters } from "./adapters.js";
+import { createDdminSchedule } from "./ddmin.js";
 import { BugBonsaiError } from "./errors.js";
 import { DefaultFailureOracle, loadCustomOracle } from "./oracle.js";
 import {
@@ -17,6 +18,7 @@ import {
   cacheRoot,
   createInventory,
   createSession,
+  fingerprintProject,
   linkDependencies,
   loadState,
   metrics,
@@ -26,13 +28,15 @@ import { auditPortability, scanSecurity } from "./security.js";
 import type {
   FailureSignature,
   FailureOracle,
+  CandidateCacheEntry,
   ReductionAttempt,
   ReductionOptions,
   ReductionResult,
   ResolvedOptions,
   RunState,
 } from "./types.js";
-import { createRunId, isPathInside, pathExists } from "./utils.js";
+import { createRunId, isPathInside, pathExists, sha256 } from "./utils.js";
+import { VERSION } from "./version.js";
 
 const DEFAULTS = {
   mode: "balanced" as const,
@@ -134,19 +138,25 @@ export async function resumeProject(
     );
   }
 
-  // v0.1 resumes from the last atomically accepted candidate in a continuation
-  // session. Reducer cursor state is intentionally rediscovered from that tree.
-  // This preserves all completed reduction work without coupling future versions
-  // to the internal ordering of today's reducer implementations.
-  const result = await reduceProject({
-    ...state.options,
-    root: best,
-    cwd: path.join(best, path.relative(state.projectRoot, state.invocationCwd)),
-    command: [...state.command],
-    ...(runtime.signal ? { signal: runtime.signal } : {}),
-    ...(runtime.onProgress ? { onProgress: runtime.onProgress } : {}),
-    ...(runtime.verbose !== undefined ? { verbose: runtime.verbose } : {}),
-  });
+  // Resume from the last atomically accepted candidate in a continuation
+  // session. Reducer cursor state is rediscovered, while content-addressed
+  // rejected-candidate entries carry forward without coupling future versions
+  // to the internal ordering of reducer implementations.
+  const result = await reduceProjectInternal(
+    {
+      ...state.options,
+      root: best,
+      cwd: path.join(
+        best,
+        path.relative(state.projectRoot, state.invocationCwd),
+      ),
+      command: [...state.command],
+      ...(runtime.signal ? { signal: runtime.signal } : {}),
+      ...(runtime.onProgress ? { onProgress: runtime.onProgress } : {}),
+      ...(runtime.verbose !== undefined ? { verbose: runtime.verbose } : {}),
+    },
+    state.cache,
+  );
   state.status = "completed";
   state.outputDirectory = result.outputDirectory;
   await saveState(session, state);
@@ -299,14 +309,39 @@ async function evaluateMutation(input: {
   options: ResolvedOptions;
   oracle: FailureOracle;
   baseline: FailureSignature;
+  cache: Record<string, CandidateCacheEntry>;
+  executionFingerprint: string;
 }): Promise<{
   attempt: ReductionAttempt;
   signature: FailureSignature;
   candidateDependencies?: string;
+  cacheKey: string;
+  cacheHit: boolean;
 }> {
   const started = performance.now();
   await copyProject(input.best, input.candidate);
   await input.mutation.apply(input.candidate);
+  const cacheKey = sha256(
+    `${input.executionFingerprint}\0${await fingerprintProject(input.candidate)}`,
+  );
+  const cached = input.cache[cacheKey];
+  if (cached) {
+    return {
+      attempt: {
+        mutationId: input.mutation.id,
+        reducer: input.mutation.reducer,
+        description: input.mutation.description,
+        accepted: false,
+        score: cached.score,
+        reason: `cached rejection: ${cached.reason}`,
+        durationMs: Math.round(performance.now() - started),
+        cached: true,
+      },
+      signature: input.baseline,
+      cacheKey,
+      cacheHit: true,
+    };
+  }
   let candidateDependencies: string | undefined;
   if (input.mutation.requiresInstall) {
     await install(input.candidate, input.manager, input.options, true);
@@ -336,8 +371,50 @@ async function evaluateMutation(input: {
       durationMs: Math.round(performance.now() - started),
     },
     signature: match.signature,
+    cacheKey,
+    cacheHit: false,
     ...(candidateDependencies ? { candidateDependencies } : {}),
   };
+}
+
+async function createExecutionFingerprint(
+  options: ResolvedOptions,
+  baseline: FailureSignature,
+): Promise<string> {
+  const environmentHash = sha256(
+    JSON.stringify(
+      Object.entries(process.env)
+        .filter((entry): entry is [string, string] => entry[1] !== undefined)
+        .sort(([left], [right]) => left.localeCompare(right)),
+    ),
+  );
+  let customOracleHash: string | undefined;
+  if (options.oraclePath) {
+    customOracleHash = sha256(await readFile(options.oraclePath));
+  }
+  return sha256(
+    JSON.stringify({
+      version: VERSION,
+      command: options.command,
+      invocationDirectory: path.relative(options.root, options.cwd),
+      baseline: baseline.stableHash,
+      match: options.match,
+      matchRegex: options.matchRegex,
+      exitCode: options.exitCode,
+      customOracleHash,
+      environmentHash,
+    }),
+  );
+}
+
+function cacheRejection(
+  cache: Record<string, CandidateCacheEntry>,
+  key: string,
+  attempt: ReductionAttempt,
+): void {
+  cache[key] = { score: attempt.score, reason: attempt.reason };
+  const keys = Object.keys(cache);
+  if (keys.length > 2_000 && keys[0]) delete cache[keys[0]];
 }
 
 async function promoteCandidate(
@@ -370,6 +447,25 @@ function selectReducers(options: ResolvedOptions): Reducer[] {
   });
 }
 
+const DDMIN_REDUCERS = new Set([
+  "files",
+  "package-json",
+  "json-config",
+  "dependencies",
+]);
+
+function scheduleMutations(
+  reducer: Reducer,
+  mutations: Mutation[],
+  mode: ResolvedOptions["mode"],
+): Mutation[] {
+  if (!DDMIN_REDUCERS.has(reducer.name)) return mutations;
+  return createDdminSchedule(mutations, {
+    maxGranularity:
+      mode === "fast" ? 4 : mode === "balanced" ? 16 : mutations.length,
+  });
+}
+
 function commandProjectPaths(options: ResolvedOptions): string[] {
   const paths: string[] = [];
   for (const part of options.command) {
@@ -383,8 +479,9 @@ function commandProjectPaths(options: ResolvedOptions): string[] {
   return paths;
 }
 
-export async function reduceProject(
+async function reduceProjectInternal(
   input: ReductionOptions,
+  initialCache: Record<string, CandidateCacheEntry> = {},
 ): Promise<ReductionResult> {
   const started = performance.now();
   const options = resolveOptions(input);
@@ -397,7 +494,7 @@ export async function reduceProject(
   await mkdir(scratch, { recursive: true });
 
   const state: RunState = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     runId,
     projectRoot: options.root,
     invocationCwd: options.cwd,
@@ -408,6 +505,8 @@ export async function reduceProject(
     options: serializableOptions(options),
     attempts: [],
     candidateRuns: 0,
+    cacheHits: 0,
+    cache: { ...initialCache },
     generation: 0,
   };
   await saveState(session, state);
@@ -454,6 +553,10 @@ export async function reduceProject(
     );
     state.baseline = baseline;
     await saveState(session, state);
+    const executionFingerprint = await createExecutionFingerprint(
+      options,
+      baseline,
+    );
 
     const protectedPaths = new Set([
       "package.json",
@@ -482,13 +585,17 @@ export async function reduceProject(
       let productive = true;
       while (productive && state.candidateRuns < options.maxRuns) {
         productive = false;
-        const mutations = await reducer.discover({
-          root: best,
-          command: options.command,
-          protectedPaths,
-          mode: options.mode,
-          adapterMatches,
-        });
+        const mutations = scheduleMutations(
+          reducer,
+          await reducer.discover({
+            root: best,
+            command: options.command,
+            protectedPaths,
+            mode: options.mode,
+            adapterMatches,
+          }),
+          options.mode,
+        );
         for (const mutation of mutations) {
           if (state.candidateRuns >= options.maxRuns) break;
           if (options.signal?.aborted)
@@ -498,7 +605,7 @@ export async function reduceProject(
             );
           const candidate = path.join(
             scratch,
-            `candidate-${state.candidateRuns + 1}`,
+            `candidate-${state.attempts.length + 1}`,
           );
           let evaluation;
           try {
@@ -511,6 +618,8 @@ export async function reduceProject(
               options,
               oracle,
               baseline,
+              cache: state.cache,
+              executionFingerprint,
             });
           } catch (error) {
             evaluation = {
@@ -524,13 +633,26 @@ export async function reduceProject(
                 durationMs: 0,
               },
               signature: baseline,
+              cacheHit: false,
             };
           }
-          state.candidateRuns += 1;
+          if (evaluation.cacheHit) state.cacheHits += 1;
+          else state.candidateRuns += 1;
+          if (
+            !evaluation.cacheHit &&
+            !evaluation.attempt.accepted &&
+            evaluation.cacheKey
+          ) {
+            cacheRejection(
+              state.cache,
+              evaluation.cacheKey,
+              evaluation.attempt,
+            );
+          }
           state.attempts.push(evaluation.attempt);
           emit(options, {
             phase: "reduce",
-            message: evaluation.attempt.description,
+            message: `${evaluation.attempt.description}${evaluation.cacheHit ? " (cached)" : ""}`,
             reducer: reducer.name,
             accepted: evaluation.attempt.accepted,
             runs: state.candidateRuns,
@@ -613,6 +735,7 @@ export async function reduceProject(
       finalMetrics,
       attempts: state.attempts,
       candidateRuns: state.candidateRuns,
+      cacheHits: state.cacheHits,
       durationMs: Math.round(performance.now() - started),
       securityFindings,
       portabilityFindings,
@@ -635,4 +758,10 @@ export async function reduceProject(
       );
     throw error;
   }
+}
+
+export async function reduceProject(
+  input: ReductionOptions,
+): Promise<ReductionResult> {
+  return reduceProjectInternal(input);
 }

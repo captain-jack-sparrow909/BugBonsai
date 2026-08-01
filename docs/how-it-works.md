@@ -2,7 +2,9 @@
 
 BugBonsai applies hierarchical delta debugging to a project copy. Reducers propose mutations such as removing a directory, a manifest field, a dependency, a JSON property, or an AST span. Each proposal is evaluated in a disposable candidate.
 
-A proposal is accepted only when the failure oracle finds compatible exit behavior, error identity, output tokens, and stack context. Accepted candidates become the next generation; rejected candidates are discarded. Execution is sequential in v0.1 so a result can never be accepted against a stale project generation.
+A proposal is accepted only when the failure oracle finds compatible exit behavior, error identity, output tokens, and stack context. Accepted candidates become the next generation; rejected candidates are discarded. Execution is sequential so a result can never be accepted against a stale project generation.
+
+Before preparation and command execution, BugBonsai fingerprints the complete candidate tree. Rejections are cached against that content plus the command, baseline, oracle, version, invocation directory, and a one-way environment fingerprint. Cache entries contain only the rejection score and reason. Accepted outcomes are deliberately not cached: every accepted mutation must still execute the failure command.
 
 Baseline capture also happens in disposable workspaces. This protects snapshots, generated outputs, caches, and other existing project files from the user-supplied command.
 

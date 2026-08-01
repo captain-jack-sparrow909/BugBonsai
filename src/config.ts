@@ -41,12 +41,12 @@ const ALLOWED_FIELDS = new Set<string>([
   "oracle",
 ]);
 const REDUCER_NAMES = {
-  files: "files",
-  packageJson: "package-json",
-  dependencies: "dependencies",
-  jsonConfig: "json-config",
-  source: "source",
-  tests: "test-structure",
+  files: ["files"],
+  packageJson: ["package-json"],
+  dependencies: ["dependencies"],
+  jsonConfig: ["json-config"],
+  source: ["source", "deep-source"],
+  tests: ["test-structure"],
 } as const;
 
 function invalid(property: string, expected: string): never {
@@ -202,7 +202,7 @@ export function validateConfig(value: unknown): BugBonsaiConfig {
   if (typed.reducers) {
     const disabled = Object.entries(typed.reducers)
       .filter(([, enabled]) => !enabled)
-      .map(([name]) => REDUCER_NAMES[name as keyof typeof REDUCER_NAMES]);
+      .flatMap(([name]) => REDUCER_NAMES[name as keyof typeof REDUCER_NAMES]);
     normalized.skipReducers = [...(typed.skipReducers ?? []), ...disabled];
   }
   return normalized;

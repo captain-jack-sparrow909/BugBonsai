@@ -20,6 +20,7 @@ try {
       {
         durationMs: result.durationMs,
         candidateRuns: result.candidateRuns,
+        cacheHits: result.cacheHits,
         originalMetrics: result.originalMetrics,
         finalMetrics: result.finalMetrics,
       },

@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import {
   cp,
@@ -6,6 +7,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  readlink,
   realpath,
   rm,
   stat,
@@ -242,13 +244,41 @@ export async function loadState(session: string): Promise<RunState> {
     const legacyOptions = raw.options as Record<string, unknown>;
     return {
       ...raw,
-      schemaVersion: 2,
+      schemaVersion: 3,
       options: { ...legacyOptions, root: raw.projectRoot },
+      cacheHits: 0,
+      cache: {},
     } as unknown as RunState;
   }
-  if (raw.schemaVersion !== 2)
+  if (raw.schemaVersion === 2) {
+    return {
+      ...raw,
+      schemaVersion: 3,
+      cacheHits: 0,
+      cache: {},
+    } as unknown as RunState;
+  }
+  if (raw.schemaVersion !== 3)
     throw new Error(`Unsupported session schema: ${String(raw.schemaVersion)}`);
   return raw as unknown as RunState;
+}
+
+export async function fingerprintProject(root: string): Promise<string> {
+  const hash = createHash("sha256");
+  for (const relative of (await walk(root)).sort()) {
+    const absolute = path.join(root, relative);
+    hash.update(relative);
+    hash.update("\0");
+    const info = await lstat(absolute);
+    if (info.isSymbolicLink()) {
+      hash.update("symlink\0");
+      hash.update(await readlink(absolute));
+    } else {
+      hash.update(await readFile(absolute));
+    }
+    hash.update("\0");
+  }
+  return hash.digest("hex");
 }
 
 export async function listStates(): Promise<

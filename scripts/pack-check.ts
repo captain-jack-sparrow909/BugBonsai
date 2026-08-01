@@ -17,7 +17,14 @@ try {
   const { stdout } = await execFileAsync(
     "npm",
     ["pack", "--json", "--ignore-scripts"],
-    { cwd: root, maxBuffer: 10 * 1024 * 1024 },
+    {
+      cwd: root,
+      maxBuffer: 10 * 1024 * 1024,
+      env: {
+        ...process.env,
+        npm_config_cache: path.join(temporary, "npm-cache"),
+      },
+    },
   );
   const packed = JSON.parse(stdout) as Array<{
     filename: string;

@@ -419,6 +419,9 @@ async function main(): Promise<void> {
       `Reproduction    ${result.finalMetrics.files} project files, ${formatBytes(result.finalMetrics.bytes)}\n\n`,
     );
     process.stdout.write(
+      `Executions      ${result.candidateRuns} candidate runs, ${result.cacheHits} cached rejections\n\n`,
+    );
+    process.stdout.write(
       `Reproduction: ${result.outputDirectory}\nRun: cd ${path.join(result.outputDirectory, result.invocationDirectory)} && ${commandLine(command)}\n`,
     );
   }

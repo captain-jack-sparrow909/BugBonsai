@@ -48,6 +48,7 @@ The command fails with the failure described above.
 | Size | ${formatBytes(result.originalMetrics.bytes)} | ${formatBytes(result.finalMetrics.bytes)} |
 
 - Candidate executions: ${result.candidateRuns}
+- Cached candidate rejections: ${result.cacheHits}
 - Accepted transformations: ${result.attempts.filter((attempt) => attempt.accepted).length}
 - Duration: ${(result.durationMs / 1000).toFixed(1)} seconds
 
@@ -77,6 +78,7 @@ BugBonsai uses heuristic failure matching and secret detection. Review the repro
       originalMetrics: result.originalMetrics,
       finalMetrics: result.finalMetrics,
       candidateRuns: result.candidateRuns,
+      cacheHits: result.cacheHits,
       acceptedMutations: result.attempts.filter((attempt) => attempt.accepted),
       rejectedAttemptCount: result.attempts.filter(
         (attempt) => !attempt.accepted,

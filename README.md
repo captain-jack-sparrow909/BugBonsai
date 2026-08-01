@@ -140,14 +140,18 @@ When output matching is domain-specific, provide a trusted local ESM predicate w
 The engine includes:
 
 - hierarchical directory and file pruning;
+- adaptive coarse-to-fine `ddmin` partitions for files, manifests, configuration, and dependencies;
 - `package.json` metadata and unused-script pruning;
 - direct dependency pruning with clean candidate installation;
 - JSON/JSONC top-level configuration pruning;
 - conservative Oxc span-based top-level JavaScript, TypeScript, JSX, and TSX pruning;
+- thorough-mode function-block, branch, class-member, switch-case, object, array, and JSX pruning;
 - nested Vitest/Jest suite, test, hook, `.each`, `.skip`, and `.only` pruning;
 - evidence-based TypeScript, Vitest, Jest, Vite, and Next.js adapters.
 
-`fast` skips dependency and source reduction. `balanced` is the default. `thorough` repeats the same conservative reducer families with a larger useful run budget supplied by the user.
+`fast` skips dependency and source reduction. `balanced` is the default. `thorough` enables deeper syntax candidates for function blocks, branches, classes, switches, objects, arrays, and JSX.
+
+Rejected candidates are cached by project content, command, oracle, normalized baseline, BugBonsai version, and a one-way environment fingerprint. A cache hit can skip a known rejection, but cached results are never used to accept a mutation.
 
 ## Package managers
 

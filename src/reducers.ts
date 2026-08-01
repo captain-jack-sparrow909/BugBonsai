@@ -287,6 +287,24 @@ interface AstNode {
   [key: string]: unknown;
 }
 
+function parseProgram(relative: string, source: string): unknown | undefined {
+  try {
+    const parsed = parseSync(relative, source);
+    return parsed.errors.length === 0 ? parsed.program : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function assertSourceParses(relative: string, source: string): void {
+  const parsed = parseSync(relative, source);
+  if (parsed.errors.length > 0) {
+    throw new Error(
+      `Source edit introduced ${parsed.errors.length} parser error${parsed.errors.length === 1 ? "" : "s"}.`,
+    );
+  }
+}
+
 function asAstNode(value: unknown): AstNode | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return undefined;
@@ -306,6 +324,100 @@ function walkAst(value: unknown, visit: (node: AstNode) => void): void {
     if (key === "type" || key === "start" || key === "end") continue;
     walkAst(child, visit);
   }
+}
+
+interface AstRelation {
+  parent?: AstNode;
+  key?: string;
+  index?: number;
+  siblings?: AstNode[];
+}
+
+function walkAstRelations(
+  value: unknown,
+  visit: (node: AstNode, relation: AstRelation) => void,
+  relation: AstRelation = {},
+): void {
+  const node = asAstNode(value);
+  if (!node) return;
+  visit(node, relation);
+  for (const [key, child] of Object.entries(node)) {
+    if (key === "type" || key === "start" || key === "end") continue;
+    if (Array.isArray(child)) {
+      const siblings = child
+        .map((entry) => asAstNode(entry))
+        .filter((entry): entry is AstNode => Boolean(entry));
+      for (const [index, sibling] of siblings.entries()) {
+        walkAstRelations(sibling, visit, {
+          parent: node,
+          key,
+          index,
+          siblings,
+        });
+      }
+    } else {
+      walkAstRelations(child, visit, { parent: node, key });
+    }
+  }
+}
+
+function listRemovalRange(
+  node: AstNode,
+  relation: AstRelation,
+): { start: number; end: number } | undefined {
+  if (typeof node.start !== "number" || typeof node.end !== "number")
+    return undefined;
+  const siblings = relation.siblings;
+  const index = relation.index;
+  if (!siblings || index === undefined)
+    return { start: node.start, end: node.end };
+  const next = siblings[index + 1];
+  if (next && typeof next.start === "number") {
+    return { start: node.start, end: next.start };
+  }
+  const previous = siblings[index - 1];
+  if (previous && typeof previous.end === "number") {
+    return { start: previous.end, end: node.end };
+  }
+  return { start: node.start, end: node.end };
+}
+
+function sourceEditMutation(input: {
+  reducer: string;
+  relative: string;
+  source: string;
+  start: number;
+  end: number;
+  replacement?: string;
+  description: string;
+}): Mutation {
+  const replacement = input.replacement ?? "";
+  return {
+    id: mutationId(
+      input.reducer,
+      `${input.relative}:${input.start}:${input.end}:${replacement}`,
+    ),
+    reducer: input.reducer,
+    description: input.description,
+    estimatedImpact: Math.max(1, input.end - input.start - replacement.length),
+    affectedPaths: [input.relative],
+    requiresInstall: false,
+    apply: async (root) => {
+      const file = path.join(root, input.relative);
+      const current = await readFile(file, "utf8");
+      if (
+        current.slice(input.start, input.end) !==
+        input.source.slice(input.start, input.end)
+      ) {
+        throw new Error("Source changed since mutation discovery.");
+      }
+      const editor = new MagicString(current);
+      editor.overwrite(input.start, input.end, replacement);
+      const output = editor.toString();
+      assertSourceParses(input.relative, output);
+      await writeFile(file, output);
+    },
+  };
 }
 
 function callRootName(value: unknown): string | undefined {
@@ -360,12 +472,8 @@ export class TestStructureReducer implements Reducer {
       const absolute = path.join(context.root, relative);
       const source = await readFile(absolute, "utf8");
       if (source.length > 500_000) continue;
-      let program: unknown;
-      try {
-        program = parseSync(relative, source).program;
-      } catch {
-        continue;
-      }
+      const program = parseProgram(relative, source);
+      if (!program) continue;
       const spans = new Set<string>();
       walkAst(program, (node) => {
         if (node.type !== "ExpressionStatement") return;
@@ -399,7 +507,7 @@ export class TestStructureReducer implements Reducer {
             const editor = new MagicString(current);
             editor.remove(start, end);
             const output = editor.toString();
-            parseSync(relative, output);
+            assertSourceParses(relative, output);
             await writeFile(file, output);
           },
         });
@@ -426,14 +534,12 @@ export class SourceReducer implements Reducer {
       const absolute = path.join(context.root, relative);
       const source = await readFile(absolute, "utf8");
       if (source.length > 500_000) continue;
-      let program: {
-        body?: Array<{ start?: number; end?: number; type?: string }>;
-      };
-      try {
-        program = parseSync(relative, source).program as typeof program;
-      } catch {
-        continue;
-      }
+      const program = parseProgram(relative, source) as
+        | {
+            body?: Array<{ start?: number; end?: number; type?: string }>;
+          }
+        | undefined;
+      if (!program) continue;
       for (const [index, node] of (program.body ?? []).entries()) {
         if (
           typeof node.start !== "number" ||
@@ -460,13 +566,144 @@ export class SourceReducer implements Reducer {
             const editor = new MagicString(current);
             editor.remove(start, end);
             const output = editor.toString();
-            parseSync(relative, output);
+            assertSourceParses(relative, output);
             await writeFile(file, output);
           },
         });
       }
     }
     return mutations.sort((a, b) => b.estimatedImpact - a.estimatedImpact);
+  }
+}
+
+export class DeepSourceReducer implements Reducer {
+  readonly name = "deep-source";
+
+  async discover(context: ReducerContext): Promise<Mutation[]> {
+    if (context.mode !== "thorough") return [];
+    const inventory = await createInventory(context.root, {
+      include: [],
+      exclude: [],
+      keep: [],
+    });
+    const mutations: Mutation[] = [];
+    for (const relative of inventory.files.filter((file) =>
+      SOURCE_PATTERN.test(file),
+    )) {
+      const source = await readFile(path.join(context.root, relative), "utf8");
+      if (source.length > 500_000) continue;
+      const program = parseProgram(relative, source);
+      if (!program) continue;
+      const seen = new Set<string>();
+      const addCandidate = (
+        range: { start: number; end: number },
+        description: string,
+        replacement = "",
+      ): void => {
+        if (range.end <= range.start) return;
+        const identity = `${range.start}:${range.end}:${replacement}`;
+        if (seen.has(identity)) return;
+        seen.add(identity);
+        mutations.push(
+          sourceEditMutation({
+            reducer: this.name,
+            relative,
+            source,
+            start: range.start,
+            end: range.end,
+            replacement,
+            description,
+          }),
+        );
+      };
+      walkAstRelations(program, (node, relation) => {
+        if (node.type === "IfStatement") {
+          const consequent = asAstNode(node.consequent);
+          if (
+            consequent &&
+            typeof consequent.start === "number" &&
+            typeof consequent.end === "number"
+          ) {
+            addCandidate(
+              { start: consequent.start, end: consequent.end },
+              `empty if consequent (${consequent.type}) in ${relative}`,
+              "{}",
+            );
+            const alternate = asAstNode(node.alternate);
+            if (
+              alternate &&
+              typeof alternate.end === "number" &&
+              /\belse\b/.test(source.slice(consequent.end, alternate.end))
+            ) {
+              addCandidate(
+                { start: consequent.end, end: alternate.end },
+                `remove else branch (${alternate.type}) from ${relative}`,
+              );
+            }
+          }
+        } else if (node.type === "ConditionalExpression") {
+          for (const branch of [node.consequent, node.alternate]) {
+            const branchNode = asAstNode(branch);
+            if (
+              branchNode &&
+              typeof branchNode.start === "number" &&
+              typeof branchNode.end === "number"
+            ) {
+              addCandidate(
+                { start: branchNode.start, end: branchNode.end },
+                `replace conditional branch (${branchNode.type}) in ${relative}`,
+                "undefined",
+              );
+            }
+          }
+        }
+
+        const parentType = relation.parent?.type;
+        const key = relation.key;
+        let range: { start: number; end: number } | undefined;
+        let kind: string | undefined;
+
+        if (
+          (parentType === "BlockStatement" && key === "body") ||
+          (parentType === "ClassBody" && key === "body") ||
+          (parentType === "SwitchStatement" && key === "cases")
+        ) {
+          range = listRemovalRange(node, {});
+          kind =
+            parentType === "BlockStatement"
+              ? "block statement"
+              : parentType === "ClassBody"
+                ? "class member"
+                : "switch case";
+        } else if (
+          (parentType === "ObjectExpression" && key === "properties") ||
+          (parentType === "ArrayExpression" && key === "elements") ||
+          (parentType === "JSXOpeningElement" && key === "attributes")
+        ) {
+          range = listRemovalRange(node, relation);
+          kind =
+            parentType === "ObjectExpression"
+              ? "object member"
+              : parentType === "ArrayExpression"
+                ? "array element"
+                : "JSX attribute";
+        } else if (
+          (parentType === "JSXElement" || parentType === "JSXFragment") &&
+          key === "children"
+        ) {
+          range = listRemovalRange(node, {});
+          kind = "JSX child";
+        }
+
+        if (!range || !kind) return;
+        addCandidate(range, `remove ${kind} (${node.type}) from ${relative}`);
+      });
+    }
+    return mutations.sort((left, right) =>
+      right.estimatedImpact === left.estimatedImpact
+        ? left.id.localeCompare(right.id)
+        : right.estimatedImpact - left.estimatedImpact,
+    );
   }
 }
 
@@ -478,5 +715,6 @@ export function defaultReducers(): Reducer[] {
     new DependencyReducer(),
     new TestStructureReducer(),
     new SourceReducer(),
+    new DeepSourceReducer(),
   ];
 }

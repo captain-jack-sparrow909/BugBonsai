@@ -97,6 +97,7 @@ export interface ReductionAttempt {
   score: number;
   reason: string;
   durationMs: number;
+  cached?: boolean;
 }
 
 export interface SecurityFinding {
@@ -123,6 +124,7 @@ export interface ReductionResult {
   finalMetrics: ProjectMetrics;
   attempts: ReductionAttempt[];
   candidateRuns: number;
+  cacheHits: number;
   durationMs: number;
   securityFindings: SecurityFinding[];
   portabilityFindings: PortabilityFinding[];
@@ -161,7 +163,7 @@ export interface ResolvedOptions extends Required<
 }
 
 export interface RunState {
-  schemaVersion: 2;
+  schemaVersion: 3;
   runId: string;
   projectRoot: string;
   invocationCwd: string;
@@ -173,9 +175,16 @@ export interface RunState {
   baseline?: FailureSignature;
   attempts: ReductionAttempt[];
   candidateRuns: number;
+  cacheHits: number;
+  cache: Record<string, CandidateCacheEntry>;
   generation: number;
   currentMetrics?: ProjectMetrics;
   outputDirectory?: string;
+}
+
+export interface CandidateCacheEntry {
+  score: number;
+  reason: string;
 }
 
 export type ConfigReducerName =

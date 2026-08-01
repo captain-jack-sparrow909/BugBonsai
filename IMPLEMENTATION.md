@@ -16,6 +16,9 @@
 - [x] Trusted custom failure-oracle modules
 - [x] Framework adapters and nested test-structure reduction
 - [x] Root-aware monorepo execution and workspace manifest pruning
+- [x] Adaptive ddmin partition scheduling
+- [x] Persisted content-based rejected-candidate cache
+- [x] Thorough nested AST reduction for blocks, classes, switches, objects, arrays, and JSX
 - [x] Unit and end-to-end fixtures
 - [ ] Preserve an in-progress reducer cursor across resume
 - [x] Packed-tarball validation and clean consumer installation
