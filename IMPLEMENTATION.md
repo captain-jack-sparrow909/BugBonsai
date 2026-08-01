@@ -32,4 +32,9 @@
 - [x] Namespaced third-party reducers, adapters, package-manager providers, and oracles
 - [x] Plugin-aware cache/resume fingerprint compatibility
 - [x] Complete shipped plugin example and authoring guide
+- [x] Content-addressed portability and environment manifest
+- [x] Deterministic ZIP32 archive and external SHA-256 sidecar
+- [x] Recipient-side integrity and failure verification command/API
+- [x] Optional Dockerfile and GitHub issue artifacts
+- [x] CI sharing guide plus round-trip and tamper tests
 - [x] Packed-tarball validation and clean consumer installation

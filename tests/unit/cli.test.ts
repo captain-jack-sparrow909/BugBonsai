@@ -52,4 +52,20 @@ describe("CLI option resolution", () => {
       pluginOracle: "local/sentinel",
     });
   });
+
+  it("resolves sharing artifact flags", () => {
+    const program = createProgram({ dockerfile: true });
+    program.parse([
+      process.execPath,
+      "bugbonsai",
+      "--archive",
+      "./repro.zip",
+      "--github-issue",
+    ]);
+    expect(program.opts()).toMatchObject({
+      archive: "./repro.zip",
+      dockerfile: true,
+      githubIssue: true,
+    });
+  });
 });

@@ -14,7 +14,13 @@ const ARRAY_FIELDS = [
   "skipReducers",
   "plugins",
 ] as const;
-const BOOLEAN_FIELDS = ["allowInstallScripts", "noInstall", "verbose"] as const;
+const BOOLEAN_FIELDS = [
+  "allowInstallScripts",
+  "noInstall",
+  "verbose",
+  "dockerfile",
+  "githubIssue",
+] as const;
 const NUMBER_FIELDS = [
   "exitCode",
   "timeoutMs",
@@ -29,6 +35,7 @@ const STRING_FIELDS = [
   "matchRegex",
   "oraclePath",
   "pluginOracle",
+  "archivePath",
 ] as const;
 const ALLOWED_FIELDS = new Set<string>([
   ...ARRAY_FIELDS,

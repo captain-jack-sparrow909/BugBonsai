@@ -59,6 +59,9 @@ export interface ReductionOptions {
   oraclePath?: string;
   pluginOracle?: string;
   plugins?: string[];
+  archivePath?: string;
+  dockerfile?: boolean;
+  githubIssue?: boolean;
   timeoutMs?: number;
   stabilityRuns?: number;
   finalRuns?: number;
@@ -136,6 +139,27 @@ export interface ReductionResult {
   durationMs: number;
   securityFindings: SecurityFinding[];
   portabilityFindings: PortabilityFinding[];
+  sharingArtifacts?: SharingArtifacts;
+}
+
+export interface SharingArtifacts {
+  manifest: string;
+  treeSha256: string;
+  archive?: string;
+  archiveSha256?: string;
+  archiveBytes?: number;
+  checksum?: string;
+  dockerfile?: string;
+  githubIssue?: string;
+}
+
+export interface VerificationResult {
+  root: string;
+  integrityVerified: boolean;
+  failureVerified: boolean;
+  installed: boolean;
+  treeSha256: string;
+  signature: FailureSignature;
 }
 
 export interface ResolvedOptions extends Required<
@@ -156,6 +180,8 @@ export interface ResolvedOptions extends Required<
     | "onlyReducers"
     | "skipReducers"
     | "plugins"
+    | "dockerfile"
+    | "githubIssue"
     | "allowInstallScripts"
     | "noInstall"
     | "outputMode"
@@ -167,6 +193,7 @@ export interface ResolvedOptions extends Required<
   exitCode?: number;
   oraclePath?: string;
   pluginOracle?: string;
+  archivePath?: string;
   installCommand?: string[];
   signal?: AbortSignal;
   onProgress?: (event: ProgressEvent) => void;

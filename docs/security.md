@@ -11,3 +11,5 @@ Workspace isolation is not a security sandbox. The reproduction command can acce
 Configuration modules, custom oracle modules, and plugins are trusted in-process code with the same privileges as BugBonsai. Plugins are only loaded when named through configuration, the CLI, or the programmatic API; they are not discovered automatically. Review their source and dependency tree before use. Plugin source hashes protect cache and resume consistency, not system security.
 
 Secret scanning is heuristic. Always inspect `bugbonsai-report.json` and the reproduction before sharing it.
+
+The portability manifest and extracted-tree digest detect changes relative to the received manifest but are not signatures. The archive `.sha256` file only establishes authenticity when its expected value arrives through a trusted channel. `bugbonsai verify` executes the recorded install and reproduction commands after integrity validation; run it under the same trust assumptions as the original project.

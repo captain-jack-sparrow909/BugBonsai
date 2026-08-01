@@ -1,4 +1,7 @@
 export { reduceProject, resumeProject } from "./engine.js";
+export { verifyReproduction } from "./verify.js";
+export { PORTABILITY_MANIFEST } from "./sharing.js";
+export type { PortabilityManifest } from "./sharing.js";
 export { BugBonsaiError } from "./errors.js";
 export { defineConfig } from "./config.js";
 export { detectAdapters } from "./adapters.js";
@@ -45,4 +48,6 @@ export type {
   ReductionMode,
   ReductionOptions,
   ReductionResult,
+  SharingArtifacts,
+  VerificationResult,
 } from "./types.js";

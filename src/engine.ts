@@ -17,6 +17,7 @@ import { runCommand } from "./process.js";
 import { loadPlugins } from "./plugin.js";
 import { defaultReducers, type Mutation, type Reducer } from "./reducers.js";
 import { writeReports } from "./report.js";
+import { writeSharingArtifacts } from "./sharing.js";
 import {
   copyInventory,
   copyProject,
@@ -55,6 +56,8 @@ const DEFAULTS = {
   onlyReducers: [] as string[],
   skipReducers: [] as string[],
   plugins: [] as string[],
+  dockerfile: false,
+  githubIssue: false,
   allowInstallScripts: false,
   noInstall: false,
   outputMode: "human" as const,
@@ -95,7 +98,16 @@ function resolveOptions(input: ReductionOptions): ResolvedOptions {
     ...(input.oraclePath
       ? { oraclePath: path.resolve(cwd, input.oraclePath) }
       : {}),
+    ...(input.archivePath
+      ? { archivePath: path.resolve(cwd, input.archivePath) }
+      : {}),
   };
+  if (result.archivePath && isPathInside(result.output, result.archivePath)) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      "The archive path must be outside the reproduction directory.",
+    );
+  }
   for (const [name, value] of [
     ["timeoutMs", result.timeoutMs],
     ["stabilityRuns", result.stabilityRuns],
@@ -574,6 +586,16 @@ async function reduceProjectInternal(
 ): Promise<ReductionResult> {
   const started = performance.now();
   const options = resolveOptions(input);
+  if (
+    options.archivePath &&
+    ((await pathExists(options.archivePath)) ||
+      (await pathExists(`${options.archivePath}.sha256`)))
+  ) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      `Archive output already exists: ${options.archivePath}`,
+    );
+  }
   const runId = resume?.state.runId ?? createRunId();
   const session = resume?.session ?? (await createSession(runId));
   const seed = path.join(session, "seed");
@@ -985,6 +1007,12 @@ async function reduceProjectInternal(
       portabilityFindings,
     };
     await writeReports(result, manager, { noInstall: options.noInstall });
+    result.sharingArtifacts = await writeSharingArtifacts(result, manager, {
+      installCommand: options.noInstall ? null : manager.installCommand,
+      dockerfile: options.dockerfile,
+      githubIssue: options.githubIssue,
+      ...(options.archivePath ? { archivePath: options.archivePath } : {}),
+    });
     state.status = "completed";
     state.outputDirectory = options.output;
     state.currentMetrics = finalMetrics;

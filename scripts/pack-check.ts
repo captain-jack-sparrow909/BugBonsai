@@ -39,8 +39,11 @@ try {
     "dist/index.js",
     "dist/index.d.ts",
     "dist/plugin.d.ts",
+    "dist/verify.d.ts",
+    "dist/sharing.d.ts",
     "docs/configuration.md",
     "docs/plugins.md",
+    "docs/sharing.md",
     "examples/plugins/full-example.mjs",
     "README.md",
     "LICENSE",
@@ -75,12 +78,19 @@ try {
   );
   if (!cli.startsWith("#!/usr/bin/env node"))
     throw new Error("Built CLI is missing its shebang.");
+  const { stdout: verifyHelp } = await execFileAsync(
+    path.join(consumer, "node_modules", ".bin", "bugbonsai"),
+    ["verify", "--help"],
+    { cwd: consumer },
+  );
+  if (!verifyHelp.includes("bugbonsai verify"))
+    throw new Error("Packed CLI is missing verify help.");
   await execFileAsync(
     process.execPath,
     [
       "--input-type=module",
       "--eval",
-      'import { BUGBONSAI_PLUGIN_API_VERSION, definePlugin } from "bugbonsai"; if (BUGBONSAI_PLUGIN_API_VERSION !== 1 || definePlugin({ apiVersion: 1, name: "pack-check" }).name !== "pack-check") process.exit(1);',
+      'import { BUGBONSAI_PLUGIN_API_VERSION, PORTABILITY_MANIFEST, definePlugin, verifyReproduction } from "bugbonsai"; if (BUGBONSAI_PLUGIN_API_VERSION !== 1 || PORTABILITY_MANIFEST !== "bugbonsai-manifest.json" || definePlugin({ apiVersion: 1, name: "pack-check" }).name !== "pack-check" || typeof verifyReproduction !== "function") process.exit(1);',
     ],
     { cwd: consumer },
   );

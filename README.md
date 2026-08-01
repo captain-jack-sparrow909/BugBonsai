@@ -68,6 +68,9 @@ bugbonsai [options] -- <command> [...arguments]
 --oracle <file>
 --plugin <specifier>
 --plugin-oracle <name>
+--archive <file>
+--dockerfile
+--github-issue
 --timeout <duration>
 --stability-runs <number>
 --final-runs <number>
@@ -170,6 +173,16 @@ bugbonsai --plugin ./bugbonsai.plugin.mjs \
 ```
 
 Plugin components are namespaced as `plugin/component`, validated against API version `1`, and fingerprinted for cache and resume compatibility. Plugins are explicit and never auto-discovered. See [docs/plugins.md](docs/plugins.md) and the shipped [complete example](examples/plugins/full-example.mjs).
+
+## Portability and sharing
+
+Every reproduction includes a content-addressed `bugbonsai-manifest.json`. Recipients can check the complete file tree and reproduce the exported failure with:
+
+```bash
+npx bugbonsai verify ./bugbonsai-repro
+```
+
+Use `--archive ./repro.zip` for a deterministic ZIP plus `.sha256` sidecar, `--dockerfile` for `Dockerfile.bugbonsai`, and `--github-issue` for an attachment-ready issue body. Environment-variable names are recorded without values, and an absolute current Node executable is normalized to `node`. See [docs/sharing.md](docs/sharing.md).
 
 ## Package managers
 

@@ -17,6 +17,7 @@ import { loadPlugins } from "./plugin.js";
 import { cacheRoot, listStates } from "./sandbox.js";
 import type { BugBonsaiConfig, ProgressEvent, ReductionMode } from "./types.js";
 import { formatBytes, isPathInside, parseDuration } from "./utils.js";
+import { verifyReproduction } from "./verify.js";
 import { VERSION } from "./version.js";
 
 const execFileAsync = promisify(execFile);
@@ -41,6 +42,9 @@ interface CliOptions {
   oracle?: string;
   pluginOracle?: string;
   plugin: string[];
+  archive?: string;
+  dockerfile?: boolean;
+  githubIssue?: boolean;
   allowInstallScripts?: boolean;
   install: boolean;
   json?: boolean;
@@ -99,6 +103,21 @@ export function createProgram(config: BugBonsaiConfig): Command {
       "--plugin-oracle <name>",
       "use a namespaced oracle from a loaded plugin",
       config.pluginOracle,
+    )
+    .option(
+      "--archive <file>",
+      "write a deterministic ZIP archive and SHA-256 file",
+      config.archivePath,
+    )
+    .option(
+      "--dockerfile",
+      "generate Dockerfile.bugbonsai",
+      config.dockerfile ?? false,
+    )
+    .option(
+      "--github-issue",
+      "generate a GitHub issue-ready Markdown file",
+      config.githubIssue ?? false,
     )
     .option(
       "--timeout <duration>",
@@ -175,7 +194,7 @@ export function createProgram(config: BugBonsaiConfig): Command {
     .option("--no-color", "disable colors")
     .addHelpText(
       "after",
-      `\nExamples:\n  $ bugbonsai -- npm test\n  $ bugbonsai --match "Hydration failed" -- pnpm build\n  $ bugbonsai --mode fast -- node failing-script.js`,
+      `\nCommands:\n  $ bugbonsai verify [directory] [--no-install] [--timeout 60s] [--json]\n\nExamples:\n  $ bugbonsai -- npm test\n  $ bugbonsai --match "Hydration failed" -- pnpm build\n  $ bugbonsai --mode fast -- node failing-script.js`,
     )
     .exitOverride();
 }
@@ -342,8 +361,66 @@ async function cleanSessions(all: boolean): Promise<void> {
     process.stdout.write("No inactive sessions to remove.\n");
 }
 
+async function verifyRun(raw: string[]): Promise<void> {
+  if (raw.includes("--help") || raw.includes("-h")) {
+    process.stdout.write(
+      "Usage: bugbonsai verify [directory] [--no-install] [--timeout <duration>] [--json] [--verbose]\n",
+    );
+    return;
+  }
+  const json = raw.includes("--json");
+  const install = !raw.includes("--no-install");
+  const verbose = raw.includes("--verbose");
+  const timeoutIndex = raw.indexOf("--timeout");
+  const timeoutValue = timeoutIndex >= 0 ? raw[timeoutIndex + 1] : undefined;
+  if (timeoutIndex >= 0 && timeoutValue === undefined)
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      "verify --timeout requires a duration.",
+    );
+  for (const value of raw.slice(1)) {
+    if (
+      value.startsWith("-") &&
+      !["--json", "--no-install", "--verbose", "--timeout"].includes(value)
+    )
+      throw new BugBonsaiError(
+        "INVALID_INPUT",
+        `Unknown verify option: ${value}`,
+      );
+  }
+  const timeoutMs =
+    timeoutValue === undefined ? 60_000 : parseDuration(timeoutValue);
+  let directory = ".";
+  for (let index = 1; index < raw.length; index += 1) {
+    const value = raw[index];
+    if (!value) continue;
+    if (value === "--timeout") {
+      index += 1;
+      continue;
+    }
+    if (!value.startsWith("-")) {
+      directory = value;
+      break;
+    }
+  }
+  const result = await verifyReproduction(directory, {
+    install,
+    timeoutMs,
+    verbose,
+  });
+  if (json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  else
+    process.stdout.write(
+      `${pc.green("✓")} Integrity verified (${result.treeSha256})\n${pc.green("✓")} Exported failure reproduced\n`,
+    );
+}
+
 async function main(): Promise<void> {
   const raw = process.argv.slice(2);
+  if (raw[0] === "verify") {
+    await verifyRun(raw);
+    return;
+  }
   const loadedConfig = await loadConfig(process.cwd());
   if (raw[0] === "doctor") {
     await doctor(
@@ -443,6 +520,9 @@ async function main(): Promise<void> {
       ? { pluginOracle: options.pluginOracle }
       : {}),
     plugins: options.plugin,
+    dockerfile: Boolean(options.dockerfile),
+    githubIssue: Boolean(options.githubIssue),
+    ...(options.archive ? { archivePath: options.archive } : {}),
     ...(options.installCommand
       ? { installCommand: options.installCommand.split(/\s+/) }
       : loadedConfig.config.installCommand
@@ -469,6 +549,10 @@ async function main(): Promise<void> {
     process.stdout.write(
       `Reproduction: ${result.outputDirectory}\nRun: cd ${path.join(result.outputDirectory, result.invocationDirectory)} && ${commandLine(command)}\n`,
     );
+    if (result.sharingArtifacts?.archive)
+      process.stdout.write(
+        `Archive: ${result.sharingArtifacts.archive}\nSHA-256: ${result.sharingArtifacts.archiveSha256}\n`,
+      );
   }
 }
 

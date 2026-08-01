@@ -71,6 +71,12 @@ Detected adapters: ${result.detectedAdapters.length > 0 ? result.detectedAdapter
 Loaded plugins: ${result.loadedPlugins.length > 0 ? result.loadedPlugins.join(", ") : "none"}.
 
 BugBonsai uses heuristic failure matching and secret detection. Review the reproduction before sharing it publicly.
+
+Verify the received file manifest and reproduce the failure with:
+
+\`\`\`bash
+npx bugbonsai verify .
+\`\`\`
 `;
   await writeFile(path.join(result.outputDirectory, "BUGBONSAI.md"), markdown);
   await writeJsonAtomic(
