@@ -235,12 +235,20 @@ export async function saveState(
 }
 
 export async function loadState(session: string): Promise<RunState> {
-  const state = await readJson<RunState>(path.join(session, "state.json"));
-  if (state.schemaVersion !== 1)
-    throw new Error(
-      `Unsupported session schema: ${String(state.schemaVersion)}`,
-    );
-  return state;
+  const raw = await readJson<Record<string, unknown>>(
+    path.join(session, "state.json"),
+  );
+  if (raw.schemaVersion === 1) {
+    const legacyOptions = raw.options as Record<string, unknown>;
+    return {
+      ...raw,
+      schemaVersion: 2,
+      options: { ...legacyOptions, root: raw.projectRoot },
+    } as unknown as RunState;
+  }
+  if (raw.schemaVersion !== 2)
+    throw new Error(`Unsupported session schema: ${String(raw.schemaVersion)}`);
+  return raw as unknown as RunState;
 }
 
 export async function listStates(): Promise<
@@ -269,11 +277,12 @@ export async function metrics(root: string): Promise<ProjectMetrics> {
   let bytes = 0;
   for (const file of files) bytes += (await stat(path.join(root, file))).size;
   let dependencies = 0;
-  const manifestFile = path.join(root, "package.json");
-  if (await pathExists(manifestFile)) {
+  for (const relative of files.filter(
+    (file) => path.posix.basename(file) === "package.json",
+  )) {
     try {
       const manifest = JSON.parse(
-        await readFile(manifestFile, "utf8"),
+        await readFile(path.join(root, relative), "utf8"),
       ) as Record<string, unknown>;
       for (const key of [
         "dependencies",

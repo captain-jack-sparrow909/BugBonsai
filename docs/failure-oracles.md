@@ -13,3 +13,25 @@ It then evaluates:
 7. deterministic token similarity.
 
 When a baseline is unstable, stop and provide a distinctive `--match` value rather than lowering the oracle threshold blindly.
+
+## Custom oracle
+
+For failures whose identity cannot be expressed with text, a regular expression, or an exit code, pass an explicit trusted ESM module:
+
+```bash
+bugbonsai --oracle ./bugbonsai.oracle.mjs -- npm test
+```
+
+```js
+export default async function oracle({ result }) {
+  return {
+    matches:
+      result.exitCode === 1 &&
+      result.stderr.includes("PAYMENT_STATE_CORRUPTED"),
+    reason: "Expected payment-state failure remains",
+    score: 1,
+  };
+}
+```
+
+The function may return a boolean or `{ matches, reason?, score? }`. Successful commands are always rejected before the custom predicate runs. The module is loaded in the BugBonsai process and therefore must be treated as trusted project code; it is never uploaded.

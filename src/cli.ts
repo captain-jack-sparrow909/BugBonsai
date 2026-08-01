@@ -1,23 +1,27 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { constants } from "node:fs";
+import { constants, realpathSync } from "node:fs";
 import { access, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { Command, CommanderError, Option } from "commander";
 import pc from "picocolors";
+import { detectAdapters } from "./adapters.js";
+import { loadConfig } from "./config.js";
 import { reduceProject, resumeProject } from "./engine.js";
 import { BugBonsaiError, exitCodeForError } from "./errors.js";
 import { detectPackageManager } from "./package-manager.js";
 import { cacheRoot, listStates } from "./sandbox.js";
-import type { ProgressEvent, ReductionMode } from "./types.js";
-import { formatBytes, parseDuration } from "./utils.js";
+import type { BugBonsaiConfig, ProgressEvent, ReductionMode } from "./types.js";
+import { formatBytes, isPathInside, parseDuration } from "./utils.js";
+import { VERSION } from "./version.js";
 
-const VERSION = "0.1.0";
 const execFileAsync = promisify(execFile);
 
 interface CliOptions {
+  root?: string;
   output?: string;
   match?: string;
   matchRegex?: string;
@@ -33,62 +37,127 @@ interface CliOptions {
   skipReducer: string[];
   onlyReducer: string[];
   installCommand?: string;
+  oracle?: string;
   allowInstallScripts?: boolean;
-  noInstall?: boolean;
+  install: boolean;
   json?: boolean;
   quiet?: boolean;
   verbose?: boolean;
-  noColor?: boolean;
+  color: boolean;
 }
 
 function collect(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
-function createProgram(): Command {
+export function createProgram(config: BugBonsaiConfig): Command {
   return new Command()
     .name("bugbonsai")
     .description("Trim any failing project into a minimal reproduction.")
     .version(VERSION)
     .usage("[options] -- <command> [...arguments]")
-    .option("-o, --output <directory>", "output directory", "./bugbonsai-repro")
+    .option(
+      "--root <directory>",
+      "project root (cwd may be inside it)",
+      config.root,
+    )
+    .option(
+      "-o, --output <directory>",
+      "output directory",
+      config.output ?? "./bugbonsai-repro",
+    )
     .option(
       "--match <text>",
       "require normalized failure output to contain text",
+      config.match,
     )
     .option(
       "--match-regex <pattern>",
       "require normalized failure output to match a regular expression",
+      config.matchRegex,
     )
-    .option("--exit-code <number>", "require a specific candidate exit code")
-    .option("--timeout <duration>", "per-command timeout", "60s")
-    .option("--stability-runs <number>", "baseline stability runs", "2")
-    .option("--final-runs <number>", "clean final validation runs", "3")
-    .option("--max-runs <number>", "maximum candidate executions", "250")
+    .option(
+      "--exit-code <number>",
+      "require a specific candidate exit code",
+      config.exitCode === undefined ? undefined : String(config.exitCode),
+    )
+    .option(
+      "--oracle <file>",
+      "trusted custom failure oracle module",
+      config.oraclePath,
+    )
+    .option(
+      "--timeout <duration>",
+      "per-command timeout",
+      config.timeoutMs === undefined ? "60s" : `${config.timeoutMs}ms`,
+    )
+    .option(
+      "--stability-runs <number>",
+      "baseline stability runs",
+      String(config.stabilityRuns ?? 2),
+    )
+    .option(
+      "--final-runs <number>",
+      "clean final validation runs",
+      String(config.finalRuns ?? 3),
+    )
+    .option(
+      "--max-runs <number>",
+      "maximum candidate executions",
+      String(config.maxRuns ?? 250),
+    )
     .addOption(
       new Option("--mode <mode>", "reduction depth")
         .choices(["fast", "balanced", "thorough"])
-        .default("balanced"),
+        .default(config.mode ?? "balanced"),
     )
-    .option("--keep <glob>", "always retain matching files", collect, [])
+    .option("--keep <glob>", "always retain matching files", collect, [
+      ...(config.keep ?? []),
+    ])
     .option(
       "--exclude <glob>",
       "exclude matching files from inventory",
       collect,
-      [],
+      [...(config.exclude ?? [])],
     )
-    .option("--include <glob>", "include only matching files", collect, [])
-    .option("--skip-reducer <name>", "disable a reducer", collect, [])
-    .option("--only-reducer <name>", "run only a reducer", collect, [])
+    .option("--include <glob>", "include only matching files", collect, [
+      ...(config.include ?? []),
+    ])
+    .option("--skip-reducer <name>", "disable a reducer", collect, [
+      ...(config.skipReducers ?? []),
+    ])
+    .option("--only-reducer <name>", "run only a reducer", collect, [
+      ...(config.onlyReducers ?? []),
+    ])
     .option(
       "--install-command <command>",
       "override dependency installation command",
     )
-    .option("--allow-install-scripts", "permit dependency lifecycle scripts")
-    .option("--no-install", "do not install dependencies")
-    .option("--json", "write one machine-readable result to stdout")
-    .option("--quiet", "show only the output path")
-    .option("--verbose", "stream candidate command output")
+    .option(
+      "--allow-install-scripts",
+      "permit dependency lifecycle scripts",
+      config.allowInstallScripts ?? false,
+    )
+    .option(
+      "--no-install",
+      "do not install dependencies",
+      !(config.noInstall ?? false),
+    )
+    .option(
+      "--json",
+      "write one machine-readable result to stdout",
+      config.outputMode === "json",
+    )
+    .option(
+      "--quiet",
+      "show only the output path",
+      config.outputMode === "quiet",
+    )
+    .option(
+      "--verbose",
+      "stream candidate command output",
+      config.verbose ?? false,
+    )
     .option("--no-color", "disable colors")
     .addHelpText(
       "after",
@@ -115,10 +184,27 @@ function humanProgress(event: ProgressEvent): void {
   process.stderr.write(`${pc.green("✓")} ${event.message}\n`);
 }
 
-async function doctor(json: boolean): Promise<void> {
+async function doctor(
+  json: boolean,
+  config: BugBonsaiConfig,
+  configPath?: string,
+): Promise<void> {
   const cwd = process.cwd();
-  const manager = await detectPackageManager(cwd, {
+  const root = path.resolve(cwd, config.root ?? cwd);
+  if (!isPathInside(root, cwd)) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      `Invocation directory must be inside the project root: ${root}`,
+    );
+  }
+  const manager = await detectPackageManager(root, {
     allowInstallScripts: false,
+  });
+  const invocationDirectory = path.relative(root, cwd).replaceAll("\\", "/");
+  const adapters = await detectAdapters({
+    root,
+    invocationDirectory,
+    command: [],
   });
   const commandVersion = async (
     executable: string,
@@ -132,10 +218,17 @@ async function doctor(json: boolean): Promise<void> {
       return undefined;
     }
   };
-  const cacheParentWritable = await access(
-    path.dirname(cacheRoot()),
-    constants.W_OK,
-  )
+  let writableProbe = path.dirname(cacheRoot());
+  while (true) {
+    const exists = await access(writableProbe, constants.F_OK)
+      .then(() => true)
+      .catch(() => false);
+    if (exists) break;
+    const parent = path.dirname(writableProbe);
+    if (parent === writableProbe) break;
+    writableProbe = parent;
+  }
+  const cacheParentWritable = await access(writableProbe, constants.W_OK)
     .then(() => true)
     .catch(() => false);
   const report = {
@@ -143,7 +236,10 @@ async function doctor(json: boolean): Promise<void> {
     nodeVersion: process.version,
     platform: os.platform(),
     architecture: os.arch(),
-    projectRoot: cwd,
+    projectRoot: root,
+    invocationDirectory: invocationDirectory || ".",
+    configFile: configPath ?? null,
+    detectedAdapters: adapters.map((adapter) => adapter.name),
     gitVersion: await commandVersion("git"),
     packageManager: manager.name,
     packageManagerVersion: await commandVersion(manager.executable),
@@ -218,8 +314,13 @@ async function cleanSessions(all: boolean): Promise<void> {
 
 async function main(): Promise<void> {
   const raw = process.argv.slice(2);
+  const loadedConfig = await loadConfig(process.cwd());
   if (raw[0] === "doctor") {
-    await doctor(raw.includes("--json"));
+    await doctor(
+      raw.includes("--json"),
+      loadedConfig.config,
+      loadedConfig.path,
+    );
     return;
   }
   if (raw[0] === "resume") {
@@ -237,7 +338,7 @@ async function main(): Promise<void> {
   const separator = raw.indexOf("--");
   const optionArgs = separator === -1 ? raw : raw.slice(0, separator);
   const command = separator === -1 ? [] : raw.slice(separator + 1);
-  const program = createProgram();
+  const program = createProgram(loadedConfig.config);
   program.parse([process.execPath, "bugbonsai", ...optionArgs]);
   const options = program.opts<CliOptions>();
   if (command.length === 0) {
@@ -247,14 +348,24 @@ async function main(): Promise<void> {
       "Provide a failing command after --.",
     );
   }
-  if (options.noColor || process.env.NO_COLOR) pc.isColorSupported = false;
+  if (!options.color || process.env.NO_COLOR) pc.isColorSupported = false;
 
   const abort = new AbortController();
   const interrupt = (): void => abort.abort();
   process.once("SIGINT", interrupt);
   process.once("SIGTERM", interrupt);
-  const json = Boolean(options.json);
-  const quiet = Boolean(options.quiet);
+  let json = Boolean(options.json);
+  let quiet = Boolean(options.quiet);
+  const explicitJson = program.getOptionValueSource("json") === "cli";
+  const explicitQuiet = program.getOptionValueSource("quiet") === "cli";
+  if (explicitJson && explicitQuiet) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      "Choose either --json or --quiet, not both.",
+    );
+  }
+  if (explicitJson) quiet = false;
+  if (explicitQuiet) json = false;
   if (!json && !quiet) {
     process.stderr.write(`${pc.green("🌱")} ${pc.bold("BugBonsai")}\n\n`);
     process.stderr.write(
@@ -263,6 +374,7 @@ async function main(): Promise<void> {
   }
   const result = await reduceProject({
     cwd: process.cwd(),
+    ...(options.root ? { root: options.root } : {}),
     command,
     mode: options.mode,
     timeoutMs: parseDuration(options.timeout),
@@ -275,17 +387,22 @@ async function main(): Promise<void> {
     onlyReducers: options.onlyReducer,
     skipReducers: options.skipReducer,
     allowInstallScripts: Boolean(options.allowInstallScripts),
-    noInstall: Boolean(options.noInstall),
+    noInstall: !options.install,
     outputMode: json ? "json" : quiet ? "quiet" : "human",
     verbose: Boolean(options.verbose),
     signal: abort.signal,
     ...(options.output ? { output: options.output } : {}),
     ...(options.match ? { match: options.match } : {}),
     ...(options.matchRegex ? { matchRegex: options.matchRegex } : {}),
-    ...(options.exitCode ? { exitCode: Number(options.exitCode) } : {}),
+    ...(options.exitCode !== undefined
+      ? { exitCode: Number(options.exitCode) }
+      : {}),
+    ...(options.oracle ? { oraclePath: options.oracle } : {}),
     ...(options.installCommand
       ? { installCommand: options.installCommand.split(/\s+/) }
-      : {}),
+      : loadedConfig.config.installCommand
+        ? { installCommand: [...loadedConfig.config.installCommand] }
+        : {}),
     ...(!json && !quiet ? { onProgress: humanProgress } : {}),
   });
   process.removeListener("SIGINT", interrupt);
@@ -302,17 +419,23 @@ async function main(): Promise<void> {
       `Reproduction    ${result.finalMetrics.files} project files, ${formatBytes(result.finalMetrics.bytes)}\n\n`,
     );
     process.stdout.write(
-      `Reproduction: ${result.outputDirectory}\nRun: cd ${result.outputDirectory} && ${commandLine(command)}\n`,
+      `Reproduction: ${result.outputDirectory}\nRun: cd ${path.join(result.outputDirectory, result.invocationDirectory)} && ${commandLine(command)}\n`,
     );
   }
 }
 
-main().catch((error: unknown) => {
-  if (error instanceof CommanderError) {
-    process.exitCode = error.exitCode;
-    return;
-  }
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`${pc.red("BugBonsai failed:")} ${message}\n`);
-  process.exitCode = exitCodeForError(error);
-});
+if (
+  process.argv[1] &&
+  pathToFileURL(realpathSync(path.resolve(process.argv[1]))).href ===
+    import.meta.url
+) {
+  main().catch((error: unknown) => {
+    if (error instanceof CommanderError) {
+      process.exitCode = error.exitCode;
+      return;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`${pc.red("BugBonsai failed:")} ${message}\n`);
+    process.exitCode = exitCodeForError(error);
+  });
+}

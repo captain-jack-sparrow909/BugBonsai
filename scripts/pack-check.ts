@@ -6,6 +6,9 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
+const manifest = JSON.parse(
+  await readFile(path.join(root, "package.json"), "utf8"),
+) as { version: string };
 const temporary = await mkdtemp(path.join(os.tmpdir(), "bugbonsai-pack-"));
 let archivePath: string | undefined;
 
@@ -28,6 +31,7 @@ try {
     "dist/cli.js",
     "dist/index.js",
     "dist/index.d.ts",
+    "docs/configuration.md",
     "README.md",
     "LICENSE",
   ]) {
@@ -53,7 +57,7 @@ try {
     ["--version"],
     { cwd: consumer },
   );
-  if (version.trim() !== "0.1.0")
+  if (version.trim() !== manifest.version)
     throw new Error(`Unexpected CLI version: ${version.trim()}`);
   const cli = await readFile(
     path.join(consumer, "node_modules", "bugbonsai", "dist", "cli.js"),

@@ -49,12 +49,14 @@ export interface FailureOracle {
 
 export interface ReductionOptions {
   cwd?: string;
+  root?: string;
   command: string[];
   output?: string;
   mode?: ReductionMode;
   match?: string;
   matchRegex?: string;
   exitCode?: number;
+  oraclePath?: string;
   timeoutMs?: number;
   stabilityRuns?: number;
   finalRuns?: number;
@@ -113,6 +115,8 @@ export interface ReductionResult {
   runId: string;
   outputDirectory: string;
   command: string[];
+  invocationDirectory: string;
+  detectedAdapters: string[];
   baseline: FailureSignature;
   finalSignature: FailureSignature;
   originalMetrics: ProjectMetrics;
@@ -128,6 +132,7 @@ export interface ResolvedOptions extends Required<
   Pick<
     ReductionOptions,
     | "cwd"
+    | "root"
     | "command"
     | "output"
     | "mode"
@@ -149,13 +154,14 @@ export interface ResolvedOptions extends Required<
   match?: string;
   matchRegex?: string;
   exitCode?: number;
+  oraclePath?: string;
   installCommand?: string[];
   signal?: AbortSignal;
   onProgress?: (event: ProgressEvent) => void;
 }
 
 export interface RunState {
-  schemaVersion: 1;
+  schemaVersion: 2;
   runId: string;
   projectRoot: string;
   invocationCwd: string;
@@ -171,3 +177,38 @@ export interface RunState {
   currentMetrics?: ProjectMetrics;
   outputDirectory?: string;
 }
+
+export type ConfigReducerName =
+  "files" | "packageJson" | "dependencies" | "jsonConfig" | "source" | "tests";
+
+export interface BugBonsaiConfig extends Omit<
+  ReductionOptions,
+  "cwd" | "command" | "signal" | "onProgress"
+> {
+  timeout?: string;
+  reducers?: Partial<Record<ConfigReducerName, boolean>>;
+  oracle?: {
+    match?: string;
+    matchRegex?: string;
+    exitCode?: number;
+    path?: string;
+  };
+}
+
+export interface CustomOracleContext {
+  baseline: FailureSignature;
+  result: CommandResult;
+  signature: FailureSignature;
+}
+
+export type CustomOracleResult =
+  | boolean
+  | {
+      matches: boolean;
+      reason?: string;
+      score?: number;
+    };
+
+export type CustomOracleFunction = (
+  context: CustomOracleContext,
+) => CustomOracleResult | Promise<CustomOracleResult>;

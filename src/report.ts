@@ -3,10 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import type { ReductionResult } from "./types.js";
 import { formatBytes, writeJsonAtomic } from "./utils.js";
+import { VERSION } from "./version.js";
 
 export async function writeReports(
   result: ReductionResult,
   packageManager: { name: string; installCommand: string[] },
+  options: { noInstall: boolean },
 ): Promise<void> {
   const markdown = `# Minimal reproduction
 
@@ -25,14 +27,12 @@ ${result.finalSignature.errorName ?? "Command failure"}${result.finalSignature.p
 
 ## Install
 
-\`\`\`bash
-${packageManager.installCommand.join(" ")}
-\`\`\`
+${options.noInstall ? "No dependency installation was requested." : `\`\`\`bash\n${packageManager.installCommand.join(" ")}\n\`\`\``}
 
 ## Reproduce
 
 \`\`\`bash
-${result.command.join(" ")}
+${result.invocationDirectory ? `cd ${result.invocationDirectory}\n` : ""}${result.command.join(" ")}
 \`\`\`
 
 ## Expected result
@@ -57,6 +57,8 @@ Generated BugBonsai report files are excluded from the project-file and size met
 
 ${result.portabilityFindings.length === 0 ? "No obvious portability problems were detected." : result.portabilityFindings.map((finding) => `- ${finding.path ? `${finding.path}: ` : ""}${finding.message}`).join("\n")}
 
+Detected adapters: ${result.detectedAdapters.length > 0 ? result.detectedAdapters.join(", ") : "generic"}.
+
 BugBonsai uses heuristic failure matching and secret detection. Review the reproduction before sharing it publicly.
 `;
   await writeFile(path.join(result.outputDirectory, "BUGBONSAI.md"), markdown);
@@ -64,9 +66,12 @@ BugBonsai uses heuristic failure matching and secret detection. Review the repro
     path.join(result.outputDirectory, "bugbonsai-report.json"),
     {
       schemaVersion: 1,
-      bugBonsaiVersion: "0.1.0",
+      bugBonsaiVersion: VERSION,
       runId: result.runId,
       command: result.command,
+      installCommand: options.noInstall ? null : packageManager.installCommand,
+      invocationDirectory: result.invocationDirectory,
+      detectedAdapters: result.detectedAdapters,
       baseline: result.baseline,
       finalSignature: result.finalSignature,
       originalMetrics: result.originalMetrics,

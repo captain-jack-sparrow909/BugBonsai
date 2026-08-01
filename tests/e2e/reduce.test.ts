@@ -39,9 +39,9 @@ describe("end-to-end reduction", () => {
     expect(await readFile(path.join(fixture, "failure.js"), "utf8")).toBe(
       before,
     );
-    expect(await readFile(path.join(output, "BUGBONSAI.md"), "utf8")).toContain(
-      "BUGBONSAI_SENTINEL_BASIC",
-    );
+    const report = await readFile(path.join(output, "BUGBONSAI.md"), "utf8");
+    expect(report).toContain("BUGBONSAI_SENTINEL_BASIC");
+    expect(report).toContain("No dependency installation was requested.");
     const reproduced = await runCommand([process.execPath, "failure.js"], {
       cwd: output,
       timeoutMs: 5_000,

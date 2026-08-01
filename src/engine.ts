@@ -1,7 +1,9 @@
 import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
+import { minimatch } from "minimatch";
+import { detectAdapters } from "./adapters.js";
 import { BugBonsaiError } from "./errors.js";
-import { DefaultFailureOracle } from "./oracle.js";
+import { DefaultFailureOracle, loadCustomOracle } from "./oracle.js";
 import {
   detectPackageManager,
   type PackageManagerInfo,
@@ -23,13 +25,14 @@ import {
 import { auditPortability, scanSecurity } from "./security.js";
 import type {
   FailureSignature,
+  FailureOracle,
   ReductionAttempt,
   ReductionOptions,
   ReductionResult,
   ResolvedOptions,
   RunState,
 } from "./types.js";
-import { createRunId, pathExists } from "./utils.js";
+import { createRunId, isPathInside, pathExists } from "./utils.js";
 
 const DEFAULTS = {
   mode: "balanced" as const,
@@ -55,6 +58,12 @@ function resolveOptions(input: ReductionOptions): ResolvedOptions {
       "A command is required after --.",
     );
   const cwd = path.resolve(input.cwd ?? process.cwd());
+  const root = path.resolve(cwd, input.root ?? cwd);
+  if (!isPathInside(root, cwd))
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      `Invocation directory must be inside the project root: ${root}`,
+    );
   const output = path.resolve(cwd, input.output ?? "bugbonsai-repro");
   if (output === cwd)
     throw new BugBonsaiError(
@@ -65,6 +74,7 @@ function resolveOptions(input: ReductionOptions): ResolvedOptions {
     ...DEFAULTS,
     ...input,
     cwd,
+    root,
     output,
     command: [...input.command],
     keep: [...(input.keep ?? [])],
@@ -72,7 +82,35 @@ function resolveOptions(input: ReductionOptions): ResolvedOptions {
     include: [...(input.include ?? [])],
     onlyReducers: [...(input.onlyReducers ?? [])],
     skipReducers: [...(input.skipReducers ?? [])],
+    ...(input.oraclePath
+      ? { oraclePath: path.resolve(cwd, input.oraclePath) }
+      : {}),
   };
+  for (const [name, value] of [
+    ["timeoutMs", result.timeoutMs],
+    ["stabilityRuns", result.stabilityRuns],
+    ["finalRuns", result.finalRuns],
+    ["maxRuns", result.maxRuns],
+  ] as const) {
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new BugBonsaiError(
+        "INVALID_INPUT",
+        `${name} must be a positive number.`,
+      );
+    }
+  }
+  for (const [name, value] of [
+    ["stabilityRuns", result.stabilityRuns],
+    ["finalRuns", result.finalRuns],
+    ["maxRuns", result.maxRuns],
+  ] as const) {
+    if (!Number.isInteger(value)) {
+      throw new BugBonsaiError("INVALID_INPUT", `${name} must be an integer.`);
+    }
+  }
+  if (result.exitCode !== undefined && !Number.isInteger(result.exitCode)) {
+    throw new BugBonsaiError("INVALID_INPUT", "exitCode must be an integer.");
+  }
   return result;
 }
 
@@ -102,7 +140,8 @@ export async function resumeProject(
   // to the internal ordering of today's reducer implementations.
   const result = await reduceProject({
     ...state.options,
-    cwd: best,
+    root: best,
+    cwd: path.join(best, path.relative(state.projectRoot, state.invocationCwd)),
     command: [...state.command],
     ...(runtime.signal ? { signal: runtime.signal } : {}),
     ...(runtime.onProgress ? { onProgress: runtime.onProgress } : {}),
@@ -129,21 +168,34 @@ function emit(
 }
 
 async function projectHasDependencies(root: string): Promise<boolean> {
-  try {
-    const manifest = JSON.parse(
-      await readFile(path.join(root, "package.json"), "utf8"),
-    ) as Record<string, unknown>;
-    return ["dependencies", "devDependencies", "optionalDependencies"].some(
-      (key) => {
+  const inventory = await createInventory(root, {
+    include: [],
+    exclude: [],
+    keep: [],
+  });
+  for (const relative of inventory.files.filter(
+    (file) => path.posix.basename(file) === "package.json",
+  )) {
+    try {
+      const manifest = JSON.parse(
+        await readFile(path.join(root, relative), "utf8"),
+      ) as Record<string, unknown>;
+      const hasDependencies = [
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+      ].some((key) => {
         const value = manifest[key];
         return Boolean(
           value && typeof value === "object" && Object.keys(value).length > 0,
         );
-      },
-    );
-  } catch {
-    return false;
+      });
+      if (hasDependencies) return true;
+    } catch {
+      // The command remains authoritative for malformed project manifests.
+    }
   }
+  return false;
 }
 
 async function install(
@@ -179,7 +231,7 @@ async function executeWithDependencies(
 ): ReturnType<typeof runCommand> {
   await linkDependencies(dependencies, root);
   return runCommand(options.command, {
-    cwd: root,
+    cwd: path.join(root, path.relative(options.root, options.cwd)),
     timeoutMs: options.timeoutMs,
     verbose: options.verbose,
     ...(options.signal ? { signal: options.signal } : {}),
@@ -191,7 +243,7 @@ async function captureBaseline(
   dependencies: string,
   scratch: string,
   options: ResolvedOptions,
-  oracle: DefaultFailureOracle,
+  oracle: FailureOracle,
 ): Promise<FailureSignature> {
   let baseline: FailureSignature | undefined;
   for (let run = 0; run < options.stabilityRuns; run += 1) {
@@ -245,7 +297,7 @@ async function evaluateMutation(input: {
   dependencies: string;
   manager: PackageManagerInfo;
   options: ResolvedOptions;
-  oracle: DefaultFailureOracle;
+  oracle: FailureOracle;
   baseline: FailureSignature;
 }): Promise<{
   attempt: ReductionAttempt;
@@ -264,7 +316,10 @@ async function evaluateMutation(input: {
     await linkDependencies(input.dependencies, input.candidate);
   }
   const result = await runCommand(input.options.command, {
-    cwd: input.candidate,
+    cwd: path.join(
+      input.candidate,
+      path.relative(input.options.root, input.options.cwd),
+    ),
     timeoutMs: input.options.timeoutMs,
     verbose: input.options.verbose,
     ...(input.options.signal ? { signal: input.options.signal } : {}),
@@ -315,6 +370,19 @@ function selectReducers(options: ResolvedOptions): Reducer[] {
   });
 }
 
+function commandProjectPaths(options: ResolvedOptions): string[] {
+  const paths: string[] = [];
+  for (const part of options.command) {
+    if (part.startsWith("-") || !/[./]/.test(part)) continue;
+    const absolute = path.isAbsolute(part)
+      ? path.resolve(part)
+      : path.resolve(options.cwd, part);
+    if (!isPathInside(options.root, absolute)) continue;
+    paths.push(path.relative(options.root, absolute).replaceAll("\\", "/"));
+  }
+  return paths;
+}
+
 export async function reduceProject(
   input: ReductionOptions,
 ): Promise<ReductionResult> {
@@ -329,9 +397,9 @@ export async function reduceProject(
   await mkdir(scratch, { recursive: true });
 
   const state: RunState = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId,
-    projectRoot: options.cwd,
+    projectRoot: options.root,
     invocationCwd: options.cwd,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -349,10 +417,18 @@ export async function reduceProject(
       phase: "inventory",
       message: "Creating isolated project inventory",
     });
-    const inventory = await createInventory(options.cwd, options);
+    const inventory = await createInventory(options.root, options);
     await copyInventory(inventory, seed);
     const originalMetrics = await metrics(seed);
     const manager = await detectPackageManager(seed, options);
+    const invocationDirectory = path
+      .relative(options.root, options.cwd)
+      .replaceAll("\\", "/");
+    const adapterMatches = await detectAdapters({
+      root: seed,
+      invocationDirectory,
+      command: options.command,
+    });
     await install(seed, manager, options);
     const installed = path.join(seed, "node_modules");
     if (await pathExists(installed)) await rename(installed, dependencies);
@@ -361,11 +437,14 @@ export async function reduceProject(
     state.currentMetrics = originalMetrics;
     await saveState(session, state);
 
-    const oracle = new DefaultFailureOracle({
+    const oracleOptions = {
       ...(options.match ? { match: options.match } : {}),
       ...(options.matchRegex ? { matchRegex: options.matchRegex } : {}),
       ...(options.exitCode !== undefined ? { exitCode: options.exitCode } : {}),
-    });
+    };
+    const oracle: FailureOracle = options.oraclePath
+      ? await loadCustomOracle(options.oraclePath, options.cwd, oracleOptions)
+      : new DefaultFailureOracle(oracleOptions);
     const baseline = await captureBaseline(
       best,
       dependencies,
@@ -378,9 +457,24 @@ export async function reduceProject(
 
     const protectedPaths = new Set([
       "package.json",
+      path.posix.join(
+        path.relative(options.root, options.cwd).replaceAll("\\", "/"),
+        "package.json",
+      ),
       manager.lockfile ?? "",
-      ...options.command.filter(
-        (part) => !part.startsWith("-") && /[./]/.test(part),
+      ...[
+        "bugbonsai.config.mjs",
+        "pnpm-workspace.yaml",
+        "pnpm-workspace.yml",
+        ".yarnrc.yml",
+      ].filter((file) => inventory.files.includes(file)),
+      ...adapterMatches.flatMap((match) => match.relevantConfig),
+      ...adapterMatches.flatMap((match) => match.protectedPaths),
+      ...commandProjectPaths(options),
+      ...inventory.files.filter((file) =>
+        options.keep.some((pattern) =>
+          minimatch(file, pattern, { dot: true, matchBase: true }),
+        ),
       ),
     ]);
     for (const reducer of selectReducers(options)) {
@@ -393,6 +487,7 @@ export async function reduceProject(
           command: options.command,
           protectedPaths,
           mode: options.mode,
+          adapterMatches,
         });
         for (const mutation of mutations) {
           if (state.candidateRuns >= options.maxRuns) break;
@@ -486,7 +581,7 @@ export async function reduceProject(
     let finalSignature = baseline;
     for (let run = 0; run < options.finalRuns; run += 1) {
       const result = await runCommand(options.command, {
-        cwd: validation,
+        cwd: path.join(validation, path.relative(options.root, options.cwd)),
         timeoutMs: options.timeoutMs,
         verbose: options.verbose,
         ...(options.signal ? { signal: options.signal } : {}),
@@ -510,6 +605,8 @@ export async function reduceProject(
       runId,
       outputDirectory: options.output,
       command: options.command,
+      invocationDirectory,
+      detectedAdapters: adapterMatches.map((match) => match.name),
       baseline,
       finalSignature,
       originalMetrics,
@@ -520,7 +617,7 @@ export async function reduceProject(
       securityFindings,
       portabilityFindings,
     };
-    await writeReports(result, manager);
+    await writeReports(result, manager, { noInstall: options.noInstall });
     state.status = "completed";
     state.outputDirectory = options.output;
     state.currentMetrics = finalMetrics;

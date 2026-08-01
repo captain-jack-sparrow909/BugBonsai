@@ -25,8 +25,10 @@ BugBonsai is a local delta-debugging engine. It repeatedly removes project mater
 - `process`: bounded, cancellable child execution without a shell.
 - `oracle`: normalization, structured signatures, and explainable matching.
 - `sandbox`: inventory, safe copy, containment, and session persistence.
-- `reducers`: hierarchical file, manifest, JSON/JSONC, dependency, and source pruning.
+- `reducers`: hierarchical file, workspace manifest, JSON/JSONC, dependency, source, and nested test-structure pruning.
+- `adapters`: evidence-based TypeScript, Vitest, Jest, Vite, and Next.js detection and reduction hints.
+- `config`: validated project-local defaults and trusted custom-oracle selection.
 - `core`: orchestration and acceptance policy.
 - `report`: Markdown and versioned JSON reproduction metadata.
 
-The public API intentionally exposes only `reduceProject` and stable configuration/result types. Reducer internals remain private until their extension contract has real-world validation.
+The public API exposes reduction entry points, stable configuration/result and oracle types, custom failure-oracle helpers, and the framework-adapter contract. Reducer internals remain private until their extension contract has real-world validation.

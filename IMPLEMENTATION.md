@@ -12,6 +12,10 @@
 - [x] Secret scan and portability audit
 - [x] Markdown and JSON reports
 - [x] CLI, doctor, session listing, and clean
+- [x] Validated project configuration and CLI precedence
+- [x] Trusted custom failure-oracle modules
+- [x] Framework adapters and nested test-structure reduction
+- [x] Root-aware monorepo execution and workspace manifest pruning
 - [x] Unit and end-to-end fixtures
 - [ ] Preserve an in-progress reducer cursor across resume
 - [x] Packed-tarball validation and clean consumer installation

@@ -1,0 +1,7 @@
+{
+  "name": "bugbonsai-test-structure-fixture",
+  "private": true,
+  "devDependencies": {
+    "vitest": "0.0.0-fixture"
+  }
+}

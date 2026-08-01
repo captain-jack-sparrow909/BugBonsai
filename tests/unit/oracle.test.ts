@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CustomFailureOracle,
   DefaultFailureOracle,
   createSignature,
   normalizeOutput,
@@ -39,6 +40,22 @@ describe("failure normalization", () => {
       result("TypeError: broken\n at run (/tmp/project/a.ts:9:7)"),
     );
     expect(first.stableHash).toBe(second.stableHash);
+  });
+});
+
+describe("CustomFailureOracle", () => {
+  it("uses a trusted project predicate as the final match decision", async () => {
+    const oracle = new CustomFailureOracle(({ result: candidate }) => ({
+      matches: candidate.combinedOutput.includes("DOMAIN_SENTINEL"),
+      reason: "domain sentinel comparison",
+    }));
+    const baseline = await oracle.capture(result("Error: DOMAIN_SENTINEL"));
+    expect(
+      (await oracle.matches(baseline, result("DOMAIN_SENTINEL"))).matches,
+    ).toBe(true);
+    expect(
+      (await oracle.matches(baseline, result("OTHER_FAILURE"))).matches,
+    ).toBe(false);
   });
 });
 

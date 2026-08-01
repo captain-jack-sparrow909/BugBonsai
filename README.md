@@ -59,9 +59,11 @@ The result is the smallest practical reproduction BugBonsai found within the con
 bugbonsai [options] -- <command> [...arguments]
 
 -o, --output <directory>
+--root <directory>
 --match <text>
 --match-regex <pattern>
 --exit-code <number>
+--oracle <file>
 --timeout <duration>
 --stability-runs <number>
 --final-runs <number>
@@ -83,6 +85,38 @@ bugbonsai [options] -- <command> [...arguments]
 
 Arguments after `--` are passed directly to the executable without reconstruction as a shell string. Pipes, redirects, environment assignments, and other shell syntax are intentionally not interpreted.
 
+For a command run inside a workspace package, select the ancestor project root while invoking BugBonsai from the package:
+
+```bash
+cd apps/web
+npx bugbonsai --root ../.. -- pnpm test
+```
+
+The generated instructions preserve `apps/web` as the command working directory.
+
+## Configuration
+
+An optional `bugbonsai.config.mjs` in the invocation directory provides project defaults. CLI arguments take precedence.
+
+```js
+/** @type {import("bugbonsai").BugBonsaiConfig} */
+export default {
+  root: "../..",
+  mode: "balanced",
+  timeout: "90s",
+  keep: ["fixtures/**"],
+  reducers: {
+    dependencies: true,
+    tests: true,
+  },
+  oracle: {
+    match: "PAYMENT_STATE_CORRUPTED",
+  },
+};
+```
+
+The configuration is a trusted local ESM module and may execute JavaScript when loaded. See [docs/configuration.md](docs/configuration.md).
+
 Additional diagnostics:
 
 ```bash
@@ -99,15 +133,19 @@ The default oracle combines exit behavior, error identity, normalized output tok
 
 Use `--match` when the output contains a stable sentinel. Use `--match-regex` for variable but structured errors. `--exit-code` is a secondary constraint and should not be used as the only evidence when many unrelated failures share the same code.
 
+When output matching is domain-specific, provide a trusted local ESM predicate with `--oracle ./bugbonsai.oracle.mjs`. See [docs/failure-oracles.md](docs/failure-oracles.md).
+
 ## Reducers
 
-The v0.1 engine includes:
+The engine includes:
 
 - hierarchical directory and file pruning;
 - `package.json` metadata and unused-script pruning;
 - direct dependency pruning with clean candidate installation;
 - JSON/JSONC top-level configuration pruning;
-- conservative Oxc span-based top-level JavaScript, TypeScript, JSX, and TSX pruning.
+- conservative Oxc span-based top-level JavaScript, TypeScript, JSX, and TSX pruning;
+- nested Vitest/Jest suite, test, hook, `.each`, `.skip`, and `.only` pruning;
+- evidence-based TypeScript, Vitest, Jest, Vite, and Next.js adapters.
 
 `fast` skips dependency and source reduction. `balanced` is the default. `thorough` repeats the same conservative reducer families with a larger useful run budget supplied by the user.
 
@@ -144,7 +182,7 @@ console.log(result.outputDirectory);
 
 - Candidate execution is sequential for correctness.
 - Resume starts a continuation session from the last atomically accepted candidate and rediscovers reducer work; it does not preserve an in-progress reducer cursor.
-- Workspace dependency pruning is conservative.
+- Workspace installation and direct dependency pruning operate from an explicit root; package-manager-specific workspace edge cases remain conservative.
 - BugBonsai isolates project files, not network or external-service side effects.
 - Failure and secret matching are heuristic and intentionally favor false rejection over preserving the wrong failure.
 

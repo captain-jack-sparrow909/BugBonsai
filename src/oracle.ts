@@ -1,12 +1,16 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import type {
   CommandResult,
+  CustomOracleFunction,
   FailureOracle,
   FailureSignature,
   NormalizedStackFrame,
   OracleMatch,
 } from "./types.js";
+import { BugBonsaiError } from "./errors.js";
 
 const STACK_PATTERN = /^\s*at\s+(?:(.*?)\s+\()?(.+?):(\d+):(\d+)\)?\s*$/;
 const ERROR_PATTERN = /\b([A-Za-z][\w]*(?:Error|Exception))(?::\s*(.*))?/;
@@ -286,5 +290,100 @@ export class DefaultFailureOracle implements FailureOracle {
           ? `failure similarity ${score.toFixed(2)} was below ${threshold.toFixed(2)}`
           : `failure matched with similarity ${score.toFixed(2)}`;
     return { matches, score, reason, signature };
+  }
+}
+
+export class CustomFailureOracle implements FailureOracle {
+  readonly #captureOracle: DefaultFailureOracle;
+  readonly #custom: CustomOracleFunction;
+
+  constructor(
+    custom: CustomOracleFunction,
+    options: DefaultOracleOptions = {},
+  ) {
+    this.#captureOracle = new DefaultFailureOracle(options);
+    this.#custom = custom;
+  }
+
+  async capture(result: CommandResult): Promise<FailureSignature> {
+    return this.#captureOracle.capture(result);
+  }
+
+  async matches(
+    baseline: FailureSignature,
+    candidate: CommandResult,
+  ): Promise<OracleMatch> {
+    const signature = createSignature(candidate);
+    if (candidate.exitCode === 0 && !candidate.signal && !candidate.timedOut) {
+      return {
+        matches: false,
+        score: 0,
+        reason: "candidate command succeeded",
+        signature,
+      };
+    }
+    let result;
+    try {
+      result = await this.#custom({ baseline, result: candidate, signature });
+    } catch (error) {
+      throw new BugBonsaiError(
+        "INVALID_INPUT",
+        `Custom oracle failed: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
+    if (typeof result === "boolean") {
+      return {
+        matches: result,
+        score: result ? 1 : 0,
+        reason: result
+          ? "custom oracle matched"
+          : "custom oracle rejected candidate",
+        signature,
+      };
+    }
+    if (!result || typeof result.matches !== "boolean") {
+      throw new BugBonsaiError(
+        "INVALID_INPUT",
+        "Custom oracle must return a boolean or { matches, reason?, score? }.",
+      );
+    }
+    return {
+      matches: result.matches,
+      score: result.score ?? (result.matches ? 1 : 0),
+      reason:
+        result.reason ??
+        (result.matches
+          ? "custom oracle matched"
+          : "custom oracle rejected candidate"),
+      signature,
+    };
+  }
+}
+
+export async function loadCustomOracle(
+  oraclePath: string,
+  cwd: string,
+  options: DefaultOracleOptions = {},
+): Promise<CustomFailureOracle> {
+  const absolute = path.resolve(cwd, oraclePath);
+  try {
+    const imported = (await import(
+      `${pathToFileURL(absolute).href}?run=${Date.now()}`
+    )) as { default?: unknown };
+    if (typeof imported.default !== "function") {
+      throw new TypeError("default export is not a function");
+    }
+    return new CustomFailureOracle(
+      imported.default as CustomOracleFunction,
+      options,
+    );
+  } catch (error) {
+    if (error instanceof BugBonsaiError) throw error;
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      `Unable to load custom oracle ${absolute}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
   }
 }
