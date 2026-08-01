@@ -1,0 +1,166 @@
+# BugBonsai
+
+> Prune everything except the bug.
+
+BugBonsai turns a failing JavaScript or TypeScript project into a small, shareable reproduction while continuously verifying that the original failure still exists.
+
+```bash
+npx bugbonsai -- npm test
+```
+
+BugBonsai is local-first, deterministic, resumable at accepted candidate boundaries, and deliberately conservative. It never uploads source code or modifies existing files in the source project. Even baseline commands run inside disposable workspaces.
+
+## Thirty-second quick start
+
+From the project containing a stable failing command:
+
+```bash
+npx bugbonsai -- npm test
+```
+
+For a noisy failure, provide a distinctive fragment:
+
+```bash
+npx bugbonsai --match "Hydration failed" -- pnpm build
+npx bugbonsai --match-regex "TS\\d{4}" -- pnpm typecheck
+```
+
+BugBonsai writes the verified reproduction to `./bugbonsai-repro` by default:
+
+```text
+🌱 BugBonsai
+
+✓ Failure reproduced 2/2
+✓ remove 83 files under docs
+✓ remove devDependencies.storybook
+✓ Final failure reproduced 3/3
+
+Reproduction verified
+
+Original        1,284 files, 2.10 GB
+Reproduction    9 files, 1.80 MB
+```
+
+## How it works
+
+1. Inventory the source project without running its command.
+2. Copy it into an isolated session workspace.
+3. Capture the failure repeatedly to reject unstable baselines.
+4. Propose large removals before small ones.
+5. Run the command after each mutation.
+6. Accept only mutations that match the structured failure oracle.
+7. Scan, freshly install, and revalidate the export.
+
+The result is the smallest practical reproduction BugBonsai found within the configured run budget. It is not a mathematical guarantee of the global minimum.
+
+## CLI
+
+```text
+bugbonsai [options] -- <command> [...arguments]
+
+-o, --output <directory>
+--match <text>
+--match-regex <pattern>
+--exit-code <number>
+--timeout <duration>
+--stability-runs <number>
+--final-runs <number>
+--max-runs <number>
+--mode <fast|balanced|thorough>
+--keep <glob>
+--exclude <glob>
+--include <glob>
+--skip-reducer <name>
+--only-reducer <name>
+--install-command <command>
+--allow-install-scripts
+--no-install
+--json
+--quiet
+--verbose
+--no-color
+```
+
+Arguments after `--` are passed directly to the executable without reconstruction as a shell string. Pipes, redirects, environment assignments, and other shell syntax are intentionally not interpreted.
+
+Additional diagnostics:
+
+```bash
+bugbonsai doctor
+bugbonsai doctor --json
+bugbonsai resume
+bugbonsai clean
+bugbonsai clean --all
+```
+
+## Failure matching
+
+The default oracle combines exit behavior, error identity, normalized output tokens, and stack-frame overlap. It rejects common candidate-created setup failures such as missing modules unless that was the original failure.
+
+Use `--match` when the output contains a stable sentinel. Use `--match-regex` for variable but structured errors. `--exit-code` is a secondary constraint and should not be used as the only evidence when many unrelated failures share the same code.
+
+## Reducers
+
+The v0.1 engine includes:
+
+- hierarchical directory and file pruning;
+- `package.json` metadata and unused-script pruning;
+- direct dependency pruning with clean candidate installation;
+- JSON/JSONC top-level configuration pruning;
+- conservative Oxc span-based top-level JavaScript, TypeScript, JSX, and TSX pruning.
+
+`fast` skips dependency and source reduction. `balanced` is the default. `thorough` repeats the same conservative reducer families with a larger useful run budget supplied by the user.
+
+## Package managers
+
+npm and pnpm are the primary validated paths. Yarn and Bun are detected and have conservative install commands, but complex workspace and Plug'n'Play layouts require additional field validation.
+
+Dependency lifecycle scripts are disabled by default. Pass `--allow-install-scripts` only after reviewing the project’s dependencies.
+
+## Security and privacy
+
+BugBonsai does not use telemetry or upload code. It excludes common credential files and scans the final output for high-confidence secret patterns.
+
+Filesystem isolation is not an OS security sandbox. The supplied command can still access the network, processes, user services, and inherited environment. Run untrusted projects in an operating-system sandbox or disposable machine. Heuristic secret scanning cannot prove that an export is secret-free; review it before publishing.
+
+See [docs/security.md](docs/security.md) for the complete model.
+
+## Programmatic API
+
+```ts
+import { reduceProject } from "bugbonsai";
+
+const result = await reduceProject({
+  cwd: process.cwd(),
+  command: ["pnpm", "test"],
+  output: "./minimal-repro",
+  match: "PAYMENT_STATE_CORRUPTED",
+});
+
+console.log(result.outputDirectory);
+```
+
+## Current limitations
+
+- Candidate execution is sequential for correctness.
+- Resume starts a continuation session from the last atomically accepted candidate and rediscovers reducer work; it does not preserve an in-progress reducer cursor.
+- Workspace dependency pruning is conservative.
+- BugBonsai isolates project files, not network or external-service side effects.
+- Failure and secret matching are heuristic and intentionally favor false rejection over preserving the wrong failure.
+
+## Development
+
+```bash
+pnpm install
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+pnpm pack:check
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [ARCHITECTURE.md](ARCHITECTURE.md), [docs/how-it-works.md](docs/how-it-works.md), and [docs/releasing.md](docs/releasing.md).
+
+## License
+
+MIT

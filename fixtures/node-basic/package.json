@@ -1,0 +1,10 @@
+{
+  "name": "bugbonsai-fixture-node-basic",
+  "version": "1.0.0",
+  "private": true,
+  "description": "This metadata should be removed",
+  "scripts": {
+    "test": "node failure.js",
+    "unrelated": "node docs/generate.js"
+  }
+}

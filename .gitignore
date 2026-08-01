@@ -1,0 +1,9 @@
+master-prompt.md
+node_modules
+.pnpm-store
+dist
+coverage
+.bugbonsai
+bugbonsai-repro
+*.tgz
+.DS_Store

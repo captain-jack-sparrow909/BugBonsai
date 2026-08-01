@@ -1,0 +1,37 @@
+name: Bug report
+description: Report incorrect reduction or CLI behavior without sharing secrets.
+body:
+  - type: textarea
+    attributes:
+      label: Doctor output
+      description: Paste `bugbonsai doctor --json`. Remove anything sensitive first.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Original command
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Failure matcher
+      options: [Default, Text, Regular expression, Exit code]
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Package manager and version
+  - type: dropdown
+    attributes:
+      label: Were install scripts enabled?
+      options: ["No", "Yes", "Unknown"]
+  - type: textarea
+    attributes:
+      label: Minimal safe logs
+      description: Never include tokens, environment values, or a private repository.
+  - type: checkboxes
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets and private source code from this report.
+          required: true

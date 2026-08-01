@@ -1,0 +1,6 @@
+dist
+coverage
+node_modules
+fixtures/**/package-lock.json
+pnpm-lock.yaml
+master-prompt.md
