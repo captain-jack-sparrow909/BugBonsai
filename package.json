@@ -20,7 +20,7 @@
     "node": ">=22"
   },
   "bin": {
-    "bugbonsai": "./dist/cli.js"
+    "bugbonsai": "dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

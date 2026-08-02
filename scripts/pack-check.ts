@@ -11,11 +11,13 @@ const manifest = JSON.parse(
 ) as {
   name: string;
   version: string;
+  bin?: { bugbonsai?: string };
   repository?: { url?: string };
   publishConfig?: { access?: string; provenance?: boolean };
 };
 if (
   manifest.name !== "bugbonsai" ||
+  manifest.bin?.bugbonsai !== "dist/cli.js" ||
   !manifest.repository?.url?.includes(
     "github.com/captain-jack-sparrow909/BugBonsai",
   ) ||
@@ -23,7 +25,7 @@ if (
   manifest.publishConfig.provenance !== true
 )
   throw new Error(
-    "Package publication metadata is incomplete or provenance is disabled.",
+    "Package publication metadata is incomplete, the CLI bin path is not npm-safe, or provenance is disabled.",
   );
 const temporary = await mkdtemp(path.join(os.tmpdir(), "bugbonsai-pack-"));
 let archivePath: string | undefined;

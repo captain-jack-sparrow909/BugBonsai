@@ -13,12 +13,13 @@ BugBonsai uses Changesets and npm Trusted Publishing.
    pnpm prepare:beta 0.1.0-beta.0
    pnpm build
    pnpm pack:check
-   npm publish --tag beta --access public
+   npm publish --tag beta --access public --provenance=false
    ```
 
    This bootstrap is necessary because npm requires a package to exist before a
    Trusted Publisher can be configured. It is the only publication that does not
-   use OIDC provenance; delete the disposable checkout afterward.
+   use OIDC provenance, so it explicitly overrides the package-wide provenance
+   requirement; delete the disposable checkout afterward.
 
 3. Configure GitHub Actions as the package's single trusted publisher, restricted to
    `.github/workflows/release.yml` on
