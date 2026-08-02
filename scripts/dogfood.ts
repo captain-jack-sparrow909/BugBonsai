@@ -13,7 +13,10 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-const args = process.argv.slice(2);
+// pnpm preserves the conventional `--` separator when forwarding script
+// arguments, while direct Node execution does not. Support both invocation
+// styles documented for contributors.
+const args = process.argv.slice(2).filter((argument) => argument !== "--");
 const caseIndex = args.indexOf("--case");
 const outputIndex = args.indexOf("--output");
 const casePath = caseIndex >= 0 ? args[caseIndex + 1] : undefined;

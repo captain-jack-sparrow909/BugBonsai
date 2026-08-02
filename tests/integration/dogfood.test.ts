@@ -104,4 +104,74 @@ describe("external dogfood runner", () => {
       "export {};\n",
     );
   });
+
+  it("accepts the pnpm-style argument separator", async () => {
+    const temporary = await mkdtemp(
+      path.join(os.tmpdir(), "bugbonsai-dogfood-args-test-"),
+    );
+    created.push(temporary);
+    const project = path.join(temporary, "project");
+    await mkdir(project, { recursive: true });
+    await writeFile(
+      path.join(project, "failure.js"),
+      'throw new Error("PUBLIC_DOGFOOD_SEPARATOR_SENTINEL");\n',
+    );
+    await writeFile(
+      path.join(project, "package.json"),
+      '{"name":"public-dogfood-args-fixture","private":true}\n',
+    );
+    await execFileAsync("git", ["init"], { cwd: project });
+    await execFileAsync("git", ["add", "."], { cwd: project });
+    await execFileAsync(
+      "git",
+      [
+        "-c",
+        "user.name=BugBonsai Test",
+        "-c",
+        "user.email=bugbonsai@example.invalid",
+        "commit",
+        "-m",
+        "fixture",
+      ],
+      { cwd: project },
+    );
+    await execFileAsync(
+      "git",
+      ["remote", "add", "origin", "https://github.com/example/project.git"],
+      { cwd: project },
+    );
+    const { stdout: commit } = await execFileAsync(
+      "git",
+      ["rev-parse", "HEAD"],
+      { cwd: project },
+    );
+    const descriptor = path.join(temporary, "case.json");
+    await writeFile(
+      descriptor,
+      JSON.stringify({
+        schemaVersion: 1,
+        id: "public-dogfood-args-fixture",
+        project: "./project",
+        upstream: {
+          repository: "https://github.com/example/project",
+          commit: commit.trim(),
+          license: "MIT",
+        },
+        command: ["{node}", "failure.js"],
+        match: "PUBLIC_DOGFOOD_SEPARATOR_SENTINEL",
+        maxRuns: 5,
+        onlyReducers: ["files"],
+      }),
+    );
+
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      ["--import", "tsx", "scripts/dogfood.ts", "--", "--case", descriptor],
+      { cwd: path.resolve("."), timeout: 20_000 },
+    );
+    expect(JSON.parse(stdout)).toMatchObject({
+      caseId: "public-dogfood-args-fixture",
+      result: { verified: true },
+    });
+  });
 });

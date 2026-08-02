@@ -18,7 +18,8 @@
 - [ ] Run `pnpm release:check` from a clean checkout.
 - [ ] Review `COMPATIBILITY.md`; do not promote partial support to verified
       without a real-command reduction.
-- [ ] Complete at least three reviewed external dogfood observations.
+- [x] Complete at least three reviewed external dogfood observations (see
+      [`docs/beta-validation.md`](docs/beta-validation.md#external-structural-dogfood)).
 - [ ] Confirm all Changesets and beta release notes describe user-visible risk.
 - [ ] Confirm `npm view bugbonsai` is either unclaimed or controlled by the
       maintainer account.
