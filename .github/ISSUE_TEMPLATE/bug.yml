@@ -1,6 +1,12 @@
 name: Bug report
 description: Report incorrect reduction or CLI behavior without sharing secrets.
 body:
+  - type: input
+    attributes:
+      label: BugBonsai version
+      placeholder: 0.2.0-beta.0
+    validations:
+      required: true
   - type: textarea
     attributes:
       label: Doctor output
@@ -29,6 +35,10 @@ body:
     attributes:
       label: Minimal safe logs
       description: Never include tokens, environment values, or a private repository.
+  - type: dropdown
+    attributes:
+      label: Did `bugbonsai verify` succeed?
+      options: ["Yes", "No", "Not run", "No reproduction was produced"]
   - type: checkboxes
     attributes:
       label: Safety check

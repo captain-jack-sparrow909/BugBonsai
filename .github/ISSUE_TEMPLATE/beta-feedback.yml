@@ -1,0 +1,44 @@
+name: Beta feedback
+description: Share what worked, what was confusing, and the value of the result.
+labels: [beta-feedback]
+body:
+  - type: input
+    attributes:
+      label: BugBonsai version
+      placeholder: 0.2.0-beta.0
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Outcome
+      options:
+        - Produced a useful reproduction
+        - Produced a reproduction that was still too large
+        - Preserved the wrong failure
+        - Could not complete
+        - Exploring the workflow
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Ecosystem
+      description: Runtime, framework, test runner, bundler, and package manager names and versions.
+      placeholder: Node 24, Vite 7, pnpm 11
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Experience
+      description: What was valuable, slow, surprising, or unclear?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Aggregate result
+      description: File counts, byte counts, run count, and duration are useful. Do not paste private source or raw logs.
+  - type: checkboxes
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I reviewed this report and removed secrets, private paths, source, and environment values.
+          required: true

@@ -4,6 +4,8 @@
 
 BugBonsai turns a failing JavaScript or TypeScript project into a small, shareable reproduction while continuously verifying that the original failure still exists.
 
+![BugBonsai terminal demonstration](docs/assets/bugbonsai-terminal.svg)
+
 ```bash
 npx bugbonsai -- npm test
 ```
@@ -208,6 +210,10 @@ fail CI on run-count, reduction-quality, cache, or material duration regressions
 The fault suite covers intermittent commands, failed installers, hostile output,
 corrupt state, interruptions, and tampered exports. See
 [docs/beta-validation.md](docs/beta-validation.md).
+
+The evidence-backed support levels are published in
+[COMPATIBILITY.md](COMPATIBILITY.md). Beta installation, feedback, and privacy
+guidance lives in [docs/public-beta.md](docs/public-beta.md).
 
 ## Programmatic API
 

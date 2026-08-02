@@ -1,0 +1,40 @@
+name: Compatibility report
+description: Propose or report support evidence for a runtime, framework, or package manager.
+labels: [compatibility]
+body:
+  - type: input
+    attributes:
+      label: Target and version
+      placeholder: Yarn 4.5 with Plug'n'Play
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Result
+      options:
+        - Reduction and recipient verification succeeded
+        - Reduction succeeded but recipient verification failed
+        - Reduction failed
+        - Detection only
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Public upstream reproduction
+      description: Link a public issue or repository at an exact commit. Leave blank for an original synthetic fixture.
+  - type: textarea
+    attributes:
+      label: Reproduction procedure
+      description: Include exact safe commands and matcher, but no tokens, private paths, source, or environment values.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Aggregate metrics
+      description: Original/final file and byte counts, candidate runs, cache hits, and duration.
+  - type: checkboxes
+    attributes:
+      label: Sharing confirmation
+      options:
+        - label: The linked material is public and this report contains no private source or secrets.
+          required: true

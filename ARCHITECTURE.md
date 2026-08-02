@@ -34,6 +34,8 @@ BugBonsai is a local delta-debugging engine. It repeatedly removes project mater
 - `sharing`: deterministic ZIP serialization, content manifests, portable command normalization, container/issue artifacts, and recipient verification.
 - `beta gates`: manifest-driven compatibility cases, versioned performance and
   reduction-quality budgets, fault injection, and packed-consumer validation.
+- `launch evidence`: pinned external dogfood descriptors, aggregate observations,
+  generated compatibility claims, and protected provenance-backed prereleases.
 - `adapters`: evidence-based TypeScript, Vitest, Jest, Vite, and Next.js detection and reduction hints.
 - `config`: validated project-local defaults and trusted custom-oracle selection.
 - `core`: orchestration and acceptance policy.

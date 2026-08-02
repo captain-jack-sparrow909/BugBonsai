@@ -59,9 +59,12 @@ try {
     "dist/sharing.d.ts",
     "docs/configuration.md",
     "docs/beta-validation.md",
+    "docs/public-beta.md",
     "docs/plugins.md",
     "docs/sharing.md",
     "examples/plugins/full-example.mjs",
+    "COMPATIBILITY.md",
+    "LAUNCH_CHECKLIST.md",
     "README.md",
     "LICENSE",
   ]) {

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title description">
+  <title id="title">BugBonsai terminal demonstration</title>
+  <desc id="description">A code bonsai beside a terminal showing a project reduced from 1,284 files to 9 files.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07150f"/>
+      <stop offset="1" stop-color="#10291c"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9ff0ad"/>
+      <stop offset="1" stop-color="#38b66b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="25" flood-color="#000" flood-opacity=".38"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="675" rx="32" fill="url(#background)"/>
+  <circle cx="126" cy="110" r="230" fill="#1f6f46" opacity=".12"/>
+  <circle cx="1110" cy="610" r="280" fill="#5ce083" opacity=".08"/>
+
+  <g transform="translate(76 88)">
+    <text x="0" y="0" fill="#ecfff1" font-family="ui-sans-serif, system-ui, sans-serif" font-size="32" font-weight="700">BugBonsai</text>
+    <text x="0" y="42" fill="#9dc5aa" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18">Prune everything except the bug.</text>
+    <g transform="translate(35 105)">
+      <path d="M115 310 C108 250 138 225 120 177 C108 144 73 132 58 96 M121 181 C152 160 175 127 182 88 M107 232 C79 218 49 220 24 202" fill="none" stroke="#bd8151" stroke-width="19" stroke-linecap="round"/>
+      <path d="M59 96 L30 61 M59 96 L87 58 M182 88 L151 48 M182 88 L220 55 M25 202 L0 174" fill="none" stroke="#58cc7a" stroke-width="8" stroke-linecap="round"/>
+      <g fill="url(#leaf)">
+        <circle cx="20" cy="48" r="27"/><circle cx="64" cy="44" r="32"/><circle cx="101" cy="64" r="25"/>
+        <circle cx="145" cy="39" r="30"/><circle cx="191" cy="42" r="34"/><circle cx="229" cy="57" r="26"/>
+        <circle cx="4" cy="167" r="25"/><circle cx="38" cy="177" r="29"/><circle cx="72" cy="170" r="22"/>
+      </g>
+      <path d="M55 326 H180 L164 376 H73 Z" fill="#d7965e"/>
+      <path d="M75 376 H162" stroke="#804c30" stroke-width="12" stroke-linecap="round"/>
+      <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#07351c" font-weight="700">
+        <text x="9" y="52">if</text><text x="52" y="49">fn</text><text x="90" y="68">{}</text>
+        <text x="134" y="44">[]</text><text x="180" y="47">=&gt;</text><text x="219" y="62">!</text>
+      </g>
+      <g stroke="#ffcf68" stroke-width="5" stroke-linecap="round">
+        <path d="M242 122 l24 -13"/><path d="M248 136 l27 4"/><path d="M235 108 l9 -25"/>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(390 76)" filter="url(#shadow)">
+    <rect width="748" height="540" rx="20" fill="#08110d" stroke="#2f5940"/>
+    <rect width="748" height="54" rx="20" fill="#14231a"/>
+    <rect y="34" width="748" height="20" fill="#14231a"/>
+    <circle cx="28" cy="27" r="7" fill="#ff6b6b"/><circle cx="52" cy="27" r="7" fill="#ffd166"/><circle cx="76" cy="27" r="7" fill="#5edb85"/>
+    <text x="374" y="33" text-anchor="middle" fill="#87a891" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">bugbonsai — local</text>
+    <g transform="translate(34 92)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">
+      <text y="0" fill="#76dd95">$</text><text x="24" y="0" fill="#e7f5eb">npx bugbonsai@beta -- npm test</text>
+      <text y="52" fill="#7ee2a0">✓</text><text x="28" y="52" fill="#b8d5c0">Captured stable failure</text>
+      <text y="84" fill="#7ee2a0">✓</text><text x="28" y="84" fill="#b8d5c0">Removed 14 unrelated directories</text>
+      <text y="116" fill="#7ee2a0">✓</text><text x="28" y="116" fill="#b8d5c0">Removed 83 unrelated files</text>
+      <text y="148" fill="#7ee2a0">✓</text><text x="28" y="148" fill="#b8d5c0">Verified the failure 3 times</text>
+      <line x1="0" y1="184" x2="680" y2="184" stroke="#294536"/>
+      <text y="222" fill="#789b83">Original</text><text x="360" y="222" fill="#789b83">Reproduction</text>
+      <text y="258" fill="#f2fff5">1,284 files</text><text x="360" y="258" fill="#9ff0ad" font-weight="700">9 files</text>
+      <text y="292" fill="#f2fff5">167 dependencies</text><text x="360" y="292" fill="#9ff0ad" font-weight="700">12 dependencies</text>
+      <text y="326" fill="#f2fff5">2.1 GB</text><text x="360" y="326" fill="#9ff0ad" font-weight="700">1.8 MB</text>
+      <line x1="0" y1="357" x2="680" y2="357" stroke="#294536"/>
+      <text y="396" fill="#7ee2a0">Reproduction verified</text>
+      <text y="432" fill="#87a891">./bugbonsai-repro</text>
+    </g>
+  </g>
+  <text x="600" y="641" text-anchor="middle" fill="#769681" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">Local-first • deterministic • framework-independent</text>
+</svg>

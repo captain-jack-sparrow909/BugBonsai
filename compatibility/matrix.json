@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "reviewed": "2026-08-02",
+  "sections": [
+    {
+      "name": "Runtime and operating system",
+      "entries": [
+        {
+          "target": "Node.js 22",
+          "status": "verified",
+          "evidence": "Corpus and end-to-end tests on Linux, Windows, and macOS"
+        },
+        {
+          "target": "Node.js 24",
+          "status": "verified",
+          "evidence": "Corpus and end-to-end tests on Linux, Windows, and macOS"
+        },
+        {
+          "target": "Node.js 26",
+          "status": "verified",
+          "evidence": "Corpus and end-to-end tests on Linux"
+        }
+      ]
+    },
+    {
+      "name": "Failure ecosystem",
+      "entries": [
+        {
+          "target": "Plain Node.js",
+          "status": "verified",
+          "evidence": "Compatibility corpus reduction and recipient verification"
+        },
+        {
+          "target": "TypeScript compiler",
+          "status": "verified",
+          "evidence": "Real tsc diagnostic in the compatibility corpus"
+        },
+        {
+          "target": "Vitest",
+          "status": "verified",
+          "evidence": "Real assertion failure in the compatibility corpus"
+        },
+        {
+          "target": "Vite",
+          "status": "partial",
+          "evidence": "Real build failure in end-to-end tests; not yet in every CI corpus job"
+        },
+        {
+          "target": "Jest",
+          "status": "partial",
+          "evidence": "Adapter and nested test-structure detection; full installed corpus case pending"
+        },
+        {
+          "target": "Next.js",
+          "status": "experimental",
+          "evidence": "Evidence-based adapter only; external dogfood case pending"
+        }
+      ]
+    },
+    {
+      "name": "Package manager",
+      "entries": [
+        {
+          "target": "npm",
+          "status": "verified",
+          "evidence": "Install planning, lockfile validation, and packed-consumer tests"
+        },
+        {
+          "target": "pnpm",
+          "status": "verified",
+          "evidence": "Workspace, lockfile, install planning, and CI validation"
+        },
+        {
+          "target": "Yarn",
+          "status": "experimental",
+          "evidence": "Conservative detection and install command; Plug'n'Play corpus pending"
+        },
+        {
+          "target": "Bun",
+          "status": "experimental",
+          "evidence": "Conservative detection and install command; workspace corpus pending"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "upstream-project-failure",
+  "project": "../../path-to-local-checkout",
+  "upstream": {
+    "repository": "https://github.com/owner/project",
+    "commit": "0123456789abcdef0123456789abcdef01234567",
+    "license": "MIT",
+    "issue": "https://github.com/owner/project/issues/123"
+  },
+  "command": ["{node}", "reproduce.js"],
+  "match": "DISTINCTIVE_FAILURE_TEXT",
+  "maxRuns": 100,
+  "mode": "balanced"
+}

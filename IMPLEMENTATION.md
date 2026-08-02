@@ -43,3 +43,8 @@
 - [x] Versioned duration, run-count, cache, and reduction-quality budgets
 - [x] Intermittency, install, process-output, executable, and state fault injection
 - [x] Canonical-repository, protected-environment trusted release workflow
+- [x] Input-validated manual npm beta channel that never moves `latest`
+- [x] Local-only pinned upstream dogfood runner with aggregate observations
+- [x] Generated evidence-backed compatibility scoreboard and drift gate
+- [x] Privacy-conscious beta, compatibility, and security feedback routing
+- [x] Public beta guide, launch checklist, and terminal demonstration asset

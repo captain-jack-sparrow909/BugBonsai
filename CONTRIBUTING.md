@@ -29,6 +29,8 @@ Changes affecting behavior should add a fixture or adversarial oracle test. Neve
 - Register deterministic real-world failure shapes in `corpus/cases.json` and
   preserve attribution for externally derived fixtures.
 - Include before/after evidence when changing `benchmarks/budgets.json`.
+- Use the local-only dogfood runner for public upstream failures; commit only
+  reviewed aggregate observations, never third-party source or raw output.
 
 See `ARCHITECTURE.md` for invariants that every reducer must preserve.
 
