@@ -10,6 +10,11 @@ BugBonsai turns a failing JavaScript or TypeScript project into a small, shareab
 npx bugbonsai -- npm test
 ```
 
+The public beta is available as
+[`v0.1.0-beta.0`](https://github.com/captain-jack-sparrow909/BugBonsai/releases/tag/v0.1.0-beta.0).
+Use `npx bugbonsai@beta -- npm test` to follow beta releases, and share results
+in the [public beta feedback thread](https://github.com/captain-jack-sparrow909/BugBonsai/issues/9).
+
 BugBonsai is local-first, deterministic, durably resumable at command boundaries, and deliberately conservative. It never uploads source code or modifies existing files in the source project. Even baseline commands run inside disposable workspaces.
 
 ## Thirty-second quick start

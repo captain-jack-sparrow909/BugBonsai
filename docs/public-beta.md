@@ -6,7 +6,7 @@ it has no telemetry and does not upload reproductions or error output.
 
 ## Install the beta
 
-After the first beta is published:
+Install the current public beta:
 
 ```bash
 npx bugbonsai@beta -- npm test
@@ -15,12 +15,15 @@ npx bugbonsai@beta -- npm test
 Pin the exact version when recording a reproducible observation:
 
 ```bash
-npx bugbonsai@0.2.0-beta.0 --version
+npx bugbonsai@0.1.0-beta.0 --version
 ```
 
-The `latest` npm tag remains reserved for stable releases. After the one-time npm
-package bootstrap, beta publication is a manual, protected workflow using npm
-Trusted Publishing and provenance.
+The one-time package bootstrap caused npm's required `latest` tag to point at the
+only published version, which is still explicitly a SemVer prerelease. Use the
+`beta` tag or the exact version while evaluating BugBonsai. No stable SemVer
+release will be published until the stable-release exit criteria are met. Future
+publication is a manual, protected workflow using npm Trusted Publishing and
+provenance.
 
 ## A useful first session
 
@@ -52,6 +55,11 @@ compatibility evidence. Aggregate file/byte counts, candidate runs, duration,
 tool versions, and whether `verify` succeeded are usually enough for initial
 triage. Never paste private source, raw customer logs, local paths, tokens, or
 environment values.
+
+Use the [public beta feedback thread](https://github.com/captain-jack-sparrow909/BugBonsai/issues/9)
+for quick observations, or open the structured **Beta feedback** issue form for a
+new environment-specific report. Release scope and known limitations are recorded
+in the [v0.1.0-beta.0 prerelease](https://github.com/captain-jack-sparrow909/BugBonsai/releases/tag/v0.1.0-beta.0).
 
 See [the compatibility scoreboard](../COMPATIBILITY.md) for the evidence behind
 each support level and [external dogfooding](../dogfood/README.md) for a
