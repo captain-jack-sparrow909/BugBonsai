@@ -8,7 +8,7 @@
       interactive beta bootstrap from a disposable checkout.
 - [x] Configure npm's single Trusted Publisher for
       `captain-jack-sparrow909/BugBonsai`, `release.yml`, and environment `npm`.
-- [ ] Require 2FA and disallow token publishing after OIDC is verified.
+- [x] Require 2FA and disallow token publishing after OIDC is verified.
 - [ ] Enable GitHub private vulnerability reporting.
 - [x] Create the `beta-feedback` and `compatibility` repository labels.
 - [ ] Confirm the README description, topics, license, and social preview.
