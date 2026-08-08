@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "reviewed": "2026-08-02",
+  "reviewed": "2026-08-08",
   "sections": [
     {
       "name": "Runtime and operating system",
@@ -42,13 +42,13 @@
         },
         {
           "target": "Vite",
-          "status": "partial",
-          "evidence": "Real build failure in end-to-end tests; not yet in every CI corpus job"
+          "status": "verified",
+          "evidence": "Real build failure reduction and recipient verification in the compatibility corpus"
         },
         {
           "target": "Jest",
-          "status": "partial",
-          "evidence": "Adapter and nested test-structure detection; full installed corpus case pending"
+          "status": "verified",
+          "evidence": "Real assertion failure and test-structure reduction in the compatibility corpus"
         },
         {
           "target": "Next.js",
