@@ -80,6 +80,48 @@
       }
     },
     {
+      "id": "jest-assertion-failure",
+      "category": "test-runner",
+      "fixture": "fixtures/jest-real",
+      "command": [
+        "{node}",
+        "{root}/node_modules/jest/bin/jest.js",
+        "payment.test.js",
+        "--runInBand",
+        "--no-cache",
+        "--config",
+        "jest.config.json"
+      ],
+      "match": "BUGBONSAI_JEST_SENTINEL",
+      "maxRuns": 12,
+      "reducers": ["test-structure"],
+      "expect": {
+        "adapter": "jest",
+        "minByteReduction": 0.1,
+        "maxCandidateRuns": 12,
+        "absentText": [
+          {
+            "path": "payment.test.js",
+            "text": "unrelated passing behavior"
+          }
+        ]
+      }
+    },
+    {
+      "id": "vite-build-failure",
+      "category": "bundler",
+      "fixture": "fixtures/vite-real",
+      "command": ["{node}", "{root}/node_modules/vite/bin/vite.js", "build"],
+      "match": "BUGBONSAI_VITE_SENTINEL",
+      "maxRuns": 15,
+      "reducers": ["files"],
+      "expect": {
+        "adapter": "vite",
+        "minFileReduction": 0.15,
+        "maxCandidateRuns": 15
+      }
+    },
+    {
       "id": "generic-test-structure",
       "category": "test-structure",
       "fixture": "fixtures/test-structure",

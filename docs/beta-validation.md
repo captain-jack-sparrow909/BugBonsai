@@ -13,6 +13,8 @@ portable reproduction. The current corpus covers:
 - deep JavaScript AST reduction;
 - a real TypeScript compiler diagnostic;
 - a real Vitest assertion failure;
+- a real Jest assertion failure with test-structure reduction;
+- a real Vite build failure;
 - framework-independent nested test structure.
 
 CI runs the corpus on Node 22 and 24 across Linux, Windows, and macOS, plus Node
@@ -20,6 +22,8 @@ CI runs the corpus on Node 22 and 24 across Linux, Windows, and macOS, plus Node
 an offline deterministic case exercises its failure path in this matrix.
 
 See `corpus/README.md` for fixture contribution and licensing rules.
+Post-launch evidence and the weekly triage loop are recorded in
+[`docs/beta-operations.md`](beta-operations.md).
 
 ## Performance and quality budgets
 
