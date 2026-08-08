@@ -35,7 +35,23 @@ body:
   - type: textarea
     attributes:
       label: Aggregate result
-      description: File counts, byte counts, run count, and duration are useful. Do not paste private source or raw logs.
+      description: Before/after file and byte counts. Do not paste private source or raw logs.
+      placeholder: Original 1,284 files / 2.1 GB; reproduction 9 files / 1.8 MB
+  - type: input
+    attributes:
+      label: Candidate runs and duration
+      description: Approximate values are useful if exact values are unavailable.
+      placeholder: 47 candidate runs in 8 minutes
+  - type: dropdown
+    attributes:
+      label: Recipient verification
+      description: Result of `npx bugbonsai@beta verify ./bugbonsai-repro --no-install`.
+      options:
+        - Passed
+        - Failed
+        - Not attempted
+    validations:
+      required: true
   - type: checkboxes
     attributes:
       label: Privacy confirmation
