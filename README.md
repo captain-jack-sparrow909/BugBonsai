@@ -12,8 +12,7 @@ npx bugbonsai -- npm test
 
 The public beta is available as
 [`v0.1.0-beta.0`](https://github.com/captain-jack-sparrow909/BugBonsai/releases/tag/v0.1.0-beta.0).
-Use `npx bugbonsai@beta -- npm test` to follow beta releases, and share results
-in the [public beta feedback thread](https://github.com/captain-jack-sparrow909/BugBonsai/issues/9).
+Use `npx bugbonsai@beta -- npm test` to follow beta releases.
 
 BugBonsai is local-first, deterministic, durably resumable at command boundaries, and deliberately conservative. It never uploads source code or modifies existing files in the source project. Even baseline commands run inside disposable workspaces.
 
@@ -47,6 +46,35 @@ Reproduction verified
 Original        1,284 files, 2.10 GB
 Reproduction    9 files, 1.80 MB
 ```
+
+## Try it on a real failure
+
+BugBonsai needs early adopters with a JavaScript or TypeScript command that fails
+the same way on repeated runs. A good first case finishes in under two minutes,
+does not require credentials or external services, and prints a distinctive error
+fragment.
+
+```bash
+npx bugbonsai@beta \
+  --match "DISTINCTIVE_ERROR_TEXT" \
+  --max-runs 100 \
+  -- npm test
+```
+
+Afterward, verify the result and spend two minutes sharing only aggregate facts:
+
+```bash
+npx bugbonsai@beta verify ./bugbonsai-repro --no-install
+```
+
+Report whether it completed, whether it preserved the right failure, before/after
+file counts, candidate runs, duration, and your tool versions in the
+[public beta feedback thread](https://github.com/captain-jack-sparrow909/BugBonsai/issues/9)
+or the
+[structured feedback form](https://github.com/captain-jack-sparrow909/BugBonsai/issues/new?template=beta-feedback.yml).
+Do not share source, raw logs, customer data, credentials, private paths, or
+environment values. The [five-minute early-adopter guide](docs/early-adopter-guide.md)
+explains the complete safe workflow and what to do if the run does not succeed.
 
 ## How it works
 
