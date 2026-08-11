@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "files": [
+    "src/project-augmentation.d.ts",
+    "src/framework-defaults.d.ts",
+    "src/check.ts"
+  ]
+}

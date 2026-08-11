@@ -12,6 +12,7 @@ portable reproduction. The current corpus covers:
 - a plain Node.js runtime error;
 - deep JavaScript AST reduction;
 - a real TypeScript compiler diagnostic;
+- a TypeScript declaration-merging failure whose identity depends on file order;
 - a real Vitest assertion failure;
 - a real Jest assertion failure with test-structure reduction;
 - a real Vite build failure;
