@@ -1,0 +1,7 @@
+{
+  "name": "bugbonsai-typescript-declaration-order-fixture",
+  "private": true,
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

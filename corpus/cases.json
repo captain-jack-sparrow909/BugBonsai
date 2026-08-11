@@ -55,6 +55,24 @@
       }
     },
     {
+      "id": "typescript-declaration-order",
+      "category": "compiler",
+      "fixture": "fixtures/typescript-declaration-order",
+      "command": [
+        "{node}",
+        "runner.mjs",
+        "{root}/node_modules/typescript/bin/tsc"
+      ],
+      "match": "BUGBONSAI_DECLARATION_ORDER_SENTINEL",
+      "maxRuns": 30,
+      "reducers": ["files", "package-json", "json-config"],
+      "expect": {
+        "adapter": "typescript",
+        "minFileReduction": 0.1,
+        "maxCandidateRuns": 30
+      }
+    },
+    {
       "id": "vitest-assertion-failure",
       "category": "test-runner",
       "fixture": "fixtures/vitest-real",
