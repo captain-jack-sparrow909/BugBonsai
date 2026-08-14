@@ -4,7 +4,7 @@ Failure equivalence is more important than raw reduction size. The default oracl
 
 It then evaluates:
 
-1. failure versus success;
+1. failure versus success, or preserved successful exit behavior for `--fail-on-output`;
 2. exit, signal, and timeout behavior;
 3. explicit text or regex constraints;
 4. introduced setup-failure categories;
@@ -15,6 +15,16 @@ It then evaluates:
 When a baseline is unstable, stop and provide a distinctive `--match` value rather than lowering the oracle threshold blindly.
 
 Explicit text, regular-expression, and exit-code constraints are checked while capturing the first baseline, not only against later candidates. This prevents an installation or configuration error from being accepted as the starting failure when it does not contain the requested bug identity.
+
+## Successful commands with incorrect output
+
+Some tools report warnings or broken generated output but still exit with code `0`. Use a stable output fragment as the failure signal:
+
+```bash
+bugbonsai --fail-on-output "Failed to resolve link" -- npm run docs
+```
+
+The fragment must appear in every baseline and accepted candidate. BugBonsai also preserves the successful exit behavior, so deleting code cannot replace the warning with a crash or missing-module error. The rule is stored in the portability manifest and reused by `bugbonsai verify`.
 
 ## Custom oracle
 

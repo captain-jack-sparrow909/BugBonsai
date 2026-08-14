@@ -68,4 +68,15 @@ describe("CLI option resolution", () => {
       githubIssue: true,
     });
   });
+
+  it("resolves output-detected failure configuration", () => {
+    const program = createProgram({ failOnOutput: "CONFIGURED_WARNING" });
+    program.parse([
+      process.execPath,
+      "bugbonsai",
+      "--fail-on-output",
+      "CLI_WARNING",
+    ]);
+    expect(program.opts()).toMatchObject({ failOnOutput: "CLI_WARNING" });
+  });
 });

@@ -105,4 +105,35 @@ describe("DefaultFailureOracle", () => {
       ).matches,
     ).toBe(true);
   });
+
+  it("treats matching output from a successful command as the failure", async () => {
+    const oracle = new DefaultFailureOracle({
+      failOnOutput: "TYPE_DOC_WARNING",
+    });
+    const baseline = await oracle.capture(result("TYPE_DOC_WARNING", 0));
+
+    expect(
+      (await oracle.matches(baseline, result("TYPE_DOC_WARNING", 0))).matches,
+    ).toBe(true);
+    await expect(oracle.capture(result("ordinary success", 0))).rejects.toThrow(
+      /did not contain failure output/i,
+    );
+    expect(
+      (await oracle.matches(baseline, result("ordinary success", 0))).matches,
+    ).toBe(false);
+  });
+
+  it("does not replace an output-detected success with a crashing command", async () => {
+    const oracle = new DefaultFailureOracle({
+      failOnOutput: "TYPE_DOC_WARNING",
+    });
+    const baseline = await oracle.capture(result("TYPE_DOC_WARNING", 0));
+    const match = await oracle.matches(
+      baseline,
+      result("Error: TYPE_DOC_WARNING", 1),
+    );
+
+    expect(match.matches).toBe(false);
+    expect(match.reason).toMatch(/exit behavior changed/i);
+  });
 });

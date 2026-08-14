@@ -33,6 +33,7 @@ const STRING_FIELDS = [
   "output",
   "match",
   "matchRegex",
+  "failOnOutput",
   "oraclePath",
   "pluginOracle",
   "archivePath",
@@ -162,6 +163,7 @@ export function validateConfig(value: unknown): BugBonsaiConfig {
     const allowedOracle = new Set([
       "match",
       "matchRegex",
+      "failOnOutput",
       "exitCode",
       "path",
       "plugin",
@@ -174,7 +176,13 @@ export function validateConfig(value: unknown): BugBonsaiConfig {
         );
       }
     }
-    for (const name of ["match", "matchRegex", "path", "plugin"] as const) {
+    for (const name of [
+      "match",
+      "matchRegex",
+      "failOnOutput",
+      "path",
+      "plugin",
+    ] as const) {
       if (oracle[name] !== undefined && typeof oracle[name] !== "string") {
         invalid(`oracle.${name}`, "a string");
       }
@@ -206,6 +214,11 @@ export function validateConfig(value: unknown): BugBonsaiConfig {
       typed.oracle.matchRegex !== undefined
     )
       normalized.matchRegex = typed.oracle.matchRegex;
+    if (
+      normalized.failOnOutput === undefined &&
+      typed.oracle.failOnOutput !== undefined
+    )
+      normalized.failOnOutput = typed.oracle.failOnOutput;
     if (
       normalized.exitCode === undefined &&
       typed.oracle.exitCode !== undefined

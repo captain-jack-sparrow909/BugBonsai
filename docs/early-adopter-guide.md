@@ -14,6 +14,9 @@ Start with a JavaScript or TypeScript project whose failing command:
 - runs without production credentials, customer data, or external services; and
 - can tolerate repeated execution in disposable copies.
 
+Commands that exit successfully but print a stable incorrect warning or diagnostic
+are also supported with `--fail-on-output "DISTINCTIVE_WARNING"`.
+
 Unit tests, type checks, and local builds are usually good first cases. Intermittent
 failures, browser sessions, network-dependent commands, and destructive scripts
 are poor first cases.

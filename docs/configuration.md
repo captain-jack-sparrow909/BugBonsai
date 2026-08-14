@@ -34,9 +34,11 @@ export default {
 
 Precedence is CLI arguments, then configuration, then built-in defaults. Configuration validation rejects unknown properties and reports nested paths such as `oracle.pattern` or `reducers.test`.
 
-The flattened programmatic names `timeoutMs`, `match`, `matchRegex`, `exitCode`, `oraclePath`, `pluginOracle`, `plugins`, `archivePath`, `dockerfile`, `githubIssue`, `onlyReducers`, and `skipReducers` are also accepted. A `false` reducer entry adds its internal reducer to `skipReducers`; a `true` entry leaves it enabled.
+The flattened programmatic names `timeoutMs`, `match`, `matchRegex`, `failOnOutput`, `exitCode`, `oraclePath`, `pluginOracle`, `plugins`, `archivePath`, `dockerfile`, `githubIssue`, `onlyReducers`, and `skipReducers` are also accepted. A `false` reducer entry adds its internal reducer to `skipReducers`; a `true` entry leaves it enabled.
 
 Plugin paths are resolved from the invocation directory. Installed package specifiers are supported. A plugin oracle is mutually exclusive with `oraclePath`; an explicit CLI oracle selection overrides the configured oracle kind. See [plugins.md](plugins.md).
+
+For a command that exits successfully while printing an incorrect warning or diagnostic, configure `oracle: { failOnOutput: "stable output fragment" }` instead.
 
 Use `defineConfig` when authoring the file in a JavaScript editor that understands imported types:
 

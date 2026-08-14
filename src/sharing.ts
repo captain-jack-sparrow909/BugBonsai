@@ -2,6 +2,7 @@ import { readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createDeterministicZip } from "./archive.js";
+import type { DefaultOracleOptions } from "./oracle.js";
 import { createInventory } from "./sandbox.js";
 import type {
   FailureSignature,
@@ -19,6 +20,7 @@ export interface PortabilityManifest {
   command: string[];
   installCommand: string[] | null;
   invocationDirectory: string;
+  oracle?: Omit<DefaultOracleOptions, "threshold">;
   failureSignature: FailureSignature;
   environment: {
     platform: string;
@@ -185,6 +187,7 @@ export async function writeSharingArtifacts(
     archivePath?: string;
     dockerfile: boolean;
     githubIssue: boolean;
+    oracle: Omit<DefaultOracleOptions, "threshold">;
   },
 ): Promise<SharingArtifacts> {
   const artifacts: SharingArtifacts = {
@@ -213,6 +216,9 @@ export async function writeSharingArtifacts(
     command: portableCommand(result.command),
     installCommand: options.installCommand,
     invocationDirectory: result.invocationDirectory,
+    ...(Object.keys(options.oracle).length > 0
+      ? { oracle: options.oracle }
+      : {}),
     failureSignature: result.finalSignature,
     environment: {
       platform: os.platform(),

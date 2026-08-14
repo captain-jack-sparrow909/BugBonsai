@@ -133,6 +133,33 @@ function resolveOptions(input: ReductionOptions): ResolvedOptions {
   if (result.exitCode !== undefined && !Number.isInteger(result.exitCode)) {
     throw new BugBonsaiError("INVALID_INPUT", "exitCode must be an integer.");
   }
+  if (
+    result.failOnOutput !== undefined &&
+    result.failOnOutput.trim().length === 0
+  ) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      "failOnOutput must contain non-whitespace text.",
+    );
+  }
+  if (
+    result.failOnOutput !== undefined &&
+    (result.match !== undefined || result.matchRegex !== undefined)
+  ) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      "Choose --fail-on-output or --match/--match-regex, not both.",
+    );
+  }
+  if (
+    result.failOnOutput !== undefined &&
+    (result.oraclePath !== undefined || result.pluginOracle !== undefined)
+  ) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      "Choose --fail-on-output or a custom/plugin oracle, not both.",
+    );
+  }
   if (result.oraclePath && result.pluginOracle) {
     throw new BugBonsaiError(
       "INVALID_INPUT",
@@ -337,9 +364,13 @@ async function captureBaseline(
       try {
         baseline = await oracle.capture(result);
       } catch (error) {
+        const reason =
+          error instanceof Error
+            ? error.message
+            : "The baseline did not satisfy the failure oracle.";
         throw new BugBonsaiError(
           "COMMAND_PASSED",
-          "The supplied command succeeded in the isolated workspace.",
+          `The supplied command did not reproduce the requested failure in the isolated workspace: ${reason}`,
           { cause: error },
         );
       }
@@ -485,6 +516,7 @@ async function createExecutionFingerprint(
       baseline: baseline.stableHash,
       match: options.match,
       matchRegex: options.matchRegex,
+      failOnOutput: options.failOnOutput,
       exitCode: options.exitCode,
       customOracleHash,
       pluginFingerprint,
@@ -696,6 +728,7 @@ async function reduceProjectInternal(
     const oracleOptions = {
       ...(options.match ? { match: options.match } : {}),
       ...(options.matchRegex ? { matchRegex: options.matchRegex } : {}),
+      ...(options.failOnOutput ? { failOnOutput: options.failOnOutput } : {}),
       ...(options.exitCode !== undefined ? { exitCode: options.exitCode } : {}),
     };
     const pluginOracle = options.pluginOracle
@@ -1011,6 +1044,14 @@ async function reduceProjectInternal(
       installCommand: options.noInstall ? null : manager.installCommand,
       dockerfile: options.dockerfile,
       githubIssue: options.githubIssue,
+      oracle: {
+        ...(options.match ? { match: options.match } : {}),
+        ...(options.matchRegex ? { matchRegex: options.matchRegex } : {}),
+        ...(options.failOnOutput ? { failOnOutput: options.failOnOutput } : {}),
+        ...(options.exitCode !== undefined
+          ? { exitCode: options.exitCode }
+          : {}),
+      },
       ...(options.archivePath ? { archivePath: options.archivePath } : {}),
     });
     state.status = "completed";
