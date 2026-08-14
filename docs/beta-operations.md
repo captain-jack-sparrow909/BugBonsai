@@ -7,10 +7,11 @@ cross-platform corpus.
 
 ## Current signal
 
-As of 2026-08-08, the public beta feedback thread has no external observations.
-The project therefore has no basis for claiming real-user adoption or ecosystem
-success yet. Initial beta operations focus on closing known evidence gaps in the
-existing fixtures while the feedback channel remains open.
+As of 2026-08-14, `0.1.0-beta.3` is published and the public beta feedback
+thread has no confirmed external BugBonsai run. A reply on an upstream issue is
+not counted unless the participant says they ran the package or provides
+aggregate run evidence. The project therefore has no basis for claiming
+real-user adoption or ecosystem success yet.
 
 Canonical feedback thread:
 https://github.com/captain-jack-sparrow909/BugBonsai/issues/9

@@ -67,9 +67,10 @@ For each observation:
 Use the weekly evidence loop in [beta operations](beta-operations.md) for corpus
 promotion.
 
-## Beta.1 decision rules
+## Release decision rules
 
-Prioritize beta.1 work from observations, not reach metrics:
+Prioritize the next beta and eventual `latest` promotion from observations, not
+reach metrics:
 
 - Fix wrong-failure preservation before reduction-quality improvements.
 - Fix crashes and unrecoverable sessions before performance work.
@@ -81,5 +82,7 @@ Prioritize beta.1 work from observations, not reach metrics:
   evidence.
 
 At the end of 14 days, publish an honest summary of outcomes, limitations, and the
-specific evidence selected for beta.1. Do not publish private report contents or
-infer unique users from npm download totals.
+specific evidence selected for the next beta. Promotion to `latest` additionally
+requires every gate in [the public beta guide](public-beta.md#promotion-to-latest).
+Do not publish private report contents or infer unique users from npm download
+totals.

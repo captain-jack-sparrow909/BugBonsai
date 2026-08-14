@@ -4,7 +4,7 @@ body:
   - type: input
     attributes:
       label: BugBonsai version
-      placeholder: 0.1.0-beta.0
+      placeholder: 0.1.0-beta.3
     validations:
       required: true
   - type: textarea

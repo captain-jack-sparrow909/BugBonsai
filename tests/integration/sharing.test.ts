@@ -7,6 +7,7 @@ import { runCommand } from "../../src/process.js";
 import type { PortabilityManifest } from "../../src/sharing.js";
 import { sha256 } from "../../src/utils.js";
 import { verifyReproduction } from "../../src/verify.js";
+import { VERSION } from "../../src/version.js";
 
 const created: string[] = [];
 afterEach(async () => {
@@ -123,7 +124,7 @@ throw new Error("BUGBONSAI_SHARING_SENTINEL");
     ).toContain('CMD ["node","failure.js"]');
     expect(
       await readFile(path.join(output, "BUGBONSAI_GITHUB_ISSUE.md"), "utf8"),
-    ).toContain("npx bugbonsai verify .");
+    ).toContain(`npx bugbonsai@${VERSION} verify .`);
 
     const verified = await verifyReproduction(output, { install: false });
     expect(verified).toMatchObject({
