@@ -335,10 +335,9 @@ export class DefaultFailureOracle implements FailureOracle {
       !baseline.errorName ||
       !signature.errorName ||
       baseline.errorName === signature.errorName;
-    const stackMatches = frameOverlap(
-      baseline.stackFrames,
-      signature.stackFrames,
-    );
+    const stackMatches = this.#options.failOnOutput
+      ? true
+      : frameOverlap(baseline.stackFrames, signature.stackFrames);
     const explicit = Boolean(
       this.#options.match || this.#options.failOnOutput || this.#regex,
     );

@@ -23,6 +23,7 @@ import {
   copyProject,
   cacheRoot,
   createDependencySnapshot,
+  createIgnoredInventory,
   createInventory,
   createSession,
   fingerprintProject,
@@ -454,50 +455,65 @@ async function evaluateMutation(input: {
   }
   let candidateDependencies: string | undefined;
   let dependencySnapshotReused = false;
-  if (input.mutation.requiresInstall) {
-    if (await pathExists(input.dependencies)) {
-      await materializeDependencies(input.dependencies, input.candidate);
-      dependencySnapshotReused = true;
+  let preserveCandidateDependencies = false;
+  const execution = `${input.candidate}.execution`;
+  try {
+    if (input.mutation.requiresInstall) {
+      if (await pathExists(input.dependencies)) {
+        await materializeDependencies(input.dependencies, input.candidate);
+        dependencySnapshotReused = true;
+      }
+      await install(input.candidate, input.manager, input.options, true);
+      const snapshot = `${input.candidate}.dependency-snapshot`;
+      if (await createDependencySnapshot(input.candidate, snapshot))
+        candidateDependencies = snapshot;
+      await copyProject(input.candidate, execution);
+      if (candidateDependencies)
+        await linkDependencies(candidateDependencies, execution);
+    } else {
+      await copyProject(input.candidate, execution);
+      await linkDependencies(input.dependencies, execution);
     }
-    await install(input.candidate, input.manager, input.options, true);
-  } else {
-    await linkDependencies(input.dependencies, input.candidate);
+    const result = await runCommand(input.options.command, {
+      cwd: path.join(
+        execution,
+        path.relative(input.options.root, input.options.cwd),
+      ),
+      timeoutMs: input.options.timeoutMs,
+      verbose: input.options.verbose,
+      ...(input.options.signal ? { signal: input.options.signal } : {}),
+    });
+    throwIfAborted(input.options);
+    const match = await input.oracle.matches(input.baseline, result);
+    if (!match.matches && candidateDependencies) {
+      await rm(candidateDependencies, { recursive: true, force: true });
+      candidateDependencies = undefined;
+    }
+    preserveCandidateDependencies = match.matches;
+    return {
+      attempt: {
+        mutationId: input.mutation.id,
+        reducer: input.mutation.reducer,
+        description: input.mutation.description,
+        accepted: match.matches,
+        score: match.score,
+        reason: match.reason,
+        durationMs: Math.round(performance.now() - started),
+        ...(dependencySnapshotReused ? { dependencySnapshotReused: true } : {}),
+      },
+      signature: match.signature,
+      cacheKey,
+      cacheHit: false,
+      ...(input.mutation.requiresInstall
+        ? { dependencyPreparationChanged: true }
+        : {}),
+      ...(candidateDependencies ? { candidateDependencies } : {}),
+    };
+  } finally {
+    await rm(execution, { recursive: true, force: true });
+    if (candidateDependencies && !preserveCandidateDependencies)
+      await rm(candidateDependencies, { recursive: true, force: true });
   }
-  const result = await runCommand(input.options.command, {
-    cwd: path.join(
-      input.candidate,
-      path.relative(input.options.root, input.options.cwd),
-    ),
-    timeoutMs: input.options.timeoutMs,
-    verbose: input.options.verbose,
-    ...(input.options.signal ? { signal: input.options.signal } : {}),
-  });
-  throwIfAborted(input.options);
-  const match = await input.oracle.matches(input.baseline, result);
-  if (input.mutation.requiresInstall && match.matches) {
-    const snapshot = `${input.candidate}.dependency-snapshot`;
-    if (await createDependencySnapshot(input.candidate, snapshot))
-      candidateDependencies = snapshot;
-  }
-  return {
-    attempt: {
-      mutationId: input.mutation.id,
-      reducer: input.mutation.reducer,
-      description: input.mutation.description,
-      accepted: match.matches,
-      score: match.score,
-      reason: match.reason,
-      durationMs: Math.round(performance.now() - started),
-      ...(dependencySnapshotReused ? { dependencySnapshotReused: true } : {}),
-    },
-    signature: match.signature,
-    cacheKey,
-    cacheHit: false,
-    ...(input.mutation.requiresInstall
-      ? { dependencyPreparationChanged: true }
-      : {}),
-    ...(candidateDependencies ? { candidateDependencies } : {}),
-  };
 }
 
 async function createExecutionFingerprint(
@@ -565,6 +581,7 @@ function selectReducers(
   pluginReducers: Reducer[] = [],
 ): Reducer[] {
   return [...pluginReducers, ...defaultReducers()].filter((reducer) => {
+    if (options.noInstall && reducer.name === "dependencies") return false;
     if (
       options.onlyReducers.length > 0 &&
       !options.onlyReducers.includes(reducer.name)
@@ -700,11 +717,10 @@ async function reduceProjectInternal(
       phase: "inventory",
       message: "Creating isolated project inventory",
     });
-    const inventory = await createInventory(options.root, options);
+    let inventory = await createInventory(options.root, options);
     if (!resume) await copyInventory(inventory, seed);
     const workingRoot = resume ? best : seed;
-    const originalMetrics =
-      state.originalMetrics ?? (await metrics(workingRoot));
+    let originalMetrics = state.originalMetrics ?? (await metrics(workingRoot));
     state.originalMetrics = originalMetrics;
     const manager = await detectPackageManager(
       workingRoot,
@@ -724,7 +740,12 @@ async function reduceProjectInternal(
     );
     if (!resume) {
       await install(seed, manager, options);
-      if (await createDependencySnapshot(seed, dependencies)) {
+      const dependencySource = options.noInstall ? options.root : seed;
+      if (
+        await createDependencySnapshot(dependencySource, dependencies, {
+          copy: options.noInstall,
+        })
+      ) {
         state.dependencySnapshot = path.relative(session, dependencies);
       }
       await copyProject(seed, best);
@@ -756,9 +777,68 @@ async function reduceProjectInternal(
       : pluginOracle
         ? new CustomFailureOracle(pluginOracle, oracleOptions)
         : new DefaultFailureOracle(oracleOptions);
-    const baseline =
-      state.baseline ??
-      (await captureBaseline(best, dependencies, scratch, options, oracle));
+    let baseline = state.baseline;
+    if (!baseline) {
+      try {
+        baseline = await captureBaseline(
+          best,
+          dependencies,
+          scratch,
+          options,
+          oracle,
+        );
+      } catch (error) {
+        const ignoredInventory =
+          !resume &&
+          error instanceof BugBonsaiError &&
+          error.code === "COMMAND_PASSED"
+            ? await createIgnoredInventory(options.root, options)
+            : undefined;
+        if (!ignoredInventory || ignoredInventory.files.length === 0)
+          throw error;
+        await copyInventory(ignoredInventory, best, { overwrite: true });
+        inventory = {
+          ...inventory,
+          files: [
+            ...new Set([...inventory.files, ...ignoredInventory.files]),
+          ].sort(),
+          excludedSensitive: [
+            ...new Set([
+              ...inventory.excludedSensitive,
+              ...ignoredInventory.excludedSensitive,
+            ]),
+          ].sort(),
+        };
+        originalMetrics = await metrics(best);
+        state.originalMetrics = originalMetrics;
+        state.currentMetrics = originalMetrics;
+        await saveState(session, state);
+        emit(options, {
+          phase: "inventory",
+          message: `Retrying with ${ignoredInventory.files.length} safe gitignored ${ignoredInventory.files.length === 1 ? "file" : "files"}`,
+        });
+        try {
+          baseline = await captureBaseline(
+            best,
+            dependencies,
+            scratch,
+            options,
+            oracle,
+          );
+        } catch (recoveryError) {
+          if (
+            recoveryError instanceof BugBonsaiError &&
+            recoveryError.code !== "COMMAND_PASSED"
+          )
+            throw recoveryError;
+          throw new BugBonsaiError(
+            "COMMAND_PASSED",
+            `${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)} The retry included safe gitignored files, so the isolated failure differs for another reason.`,
+            { cause: recoveryError },
+          );
+        }
+      }
+    }
     state.baseline = baseline;
     await saveState(session, state);
     const executionFingerprint = await createExecutionFingerprint(
@@ -1003,6 +1083,7 @@ async function reduceProjectInternal(
     const validation = path.join(scratch, "final-validation");
     await copyProject(options.output, validation);
     await install(validation, manager, options);
+    if (options.noInstall) await linkDependencies(dependencies, validation);
     let finalSignature = baseline;
     for (let run = 0; run < options.finalRuns; run += 1) {
       throwIfAborted(options);
