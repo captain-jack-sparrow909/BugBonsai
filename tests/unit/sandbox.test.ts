@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { runCommand } from "../../src/process.js";
 import {
   createInventory,
+  createIgnoredInventory,
   linkDependencies,
   listStates,
   loadState,
@@ -93,6 +94,33 @@ describe("session state migration", () => {
 });
 
 describe("dependency isolation", () => {
+  it("discovers safe gitignored artifacts separately from the fast inventory", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "bugbonsai-inventory-ignored-"),
+    );
+    await mkdir(path.join(root, "dist"), { recursive: true });
+    await writeFile(path.join(root, ".gitignore"), "dist/\n.env\n");
+    await writeFile(path.join(root, "index.js"), "export {};\n");
+    await writeFile(
+      path.join(root, "dist", "failure.js"),
+      "throw new Error();\n",
+    );
+    await writeFile(path.join(root, ".env"), "TOKEN=secret\n");
+    const initialized = await runCommand(["git", "init", "--quiet"], {
+      cwd: root,
+      timeoutMs: 5_000,
+    });
+    expect(initialized.exitCode).toBe(0);
+
+    const options = { include: [], exclude: [], keep: [] };
+    const inventory = await createInventory(root, options);
+    const ignored = await createIgnoredInventory(root, options);
+    expect(inventory.files).toEqual([".gitignore", "index.js"]);
+    expect(ignored?.files).toEqual(["dist/failure.js"]);
+    expect(ignored?.excludedSensitive).toEqual([".env"]);
+    await rm(root, { recursive: true, force: true });
+  });
+
   it("recursively excludes dependency trees and npm caches from inventory", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "bugbonsai-inventory-dependencies-"),

@@ -67,7 +67,10 @@ export interface Inventory {
   source: "git" | "filesystem";
 }
 
-async function gitFiles(root: string): Promise<string[] | undefined> {
+async function gitFiles(
+  root: string,
+  ignored = false,
+): Promise<string[] | undefined> {
   try {
     const { stdout } = await execFileAsync(
       "git",
@@ -75,8 +78,8 @@ async function gitFiles(root: string): Promise<string[] | undefined> {
         "-C",
         root,
         "ls-files",
-        "--cached",
         "--others",
+        ...(ignored ? ["--ignored"] : ["--cached"]),
         "--exclude-standard",
         "-z",
       ],
@@ -112,13 +115,12 @@ function matchesAny(file: string, patterns: string[]): boolean {
   );
 }
 
-export async function createInventory(
+function inventoryFromCandidates(
   root: string,
+  candidates: string[],
   options: Pick<ResolvedOptions, "include" | "exclude" | "keep">,
-): Promise<Inventory> {
-  const resolvedRoot = await realpath(root);
-  const fromGit = await gitFiles(resolvedRoot);
-  const candidates = fromGit ?? (await walk(resolvedRoot));
+  source: Inventory["source"],
+): Inventory {
   const files: string[] = [];
   const excludedSensitive: string[] = [];
   for (const rawFile of candidates) {
@@ -146,16 +148,42 @@ export async function createInventory(
     files.push(file);
   }
   return {
-    root: resolvedRoot,
+    root,
     files: [...new Set(files)].sort(),
-    excludedSensitive,
-    source: fromGit ? "git" : "filesystem",
+    excludedSensitive: [...new Set(excludedSensitive)].sort(),
+    source,
   };
+}
+
+export async function createInventory(
+  root: string,
+  options: Pick<ResolvedOptions, "include" | "exclude" | "keep">,
+): Promise<Inventory> {
+  const resolvedRoot = await realpath(root);
+  const fromGit = await gitFiles(resolvedRoot);
+  const candidates = fromGit ?? (await walk(resolvedRoot));
+  return inventoryFromCandidates(
+    resolvedRoot,
+    candidates,
+    options,
+    fromGit ? "git" : "filesystem",
+  );
+}
+
+export async function createIgnoredInventory(
+  root: string,
+  options: Pick<ResolvedOptions, "include" | "exclude" | "keep">,
+): Promise<Inventory | undefined> {
+  const resolvedRoot = await realpath(root);
+  const candidates = await gitFiles(resolvedRoot, true);
+  if (!candidates) return undefined;
+  return inventoryFromCandidates(resolvedRoot, candidates, options, "git");
 }
 
 export async function copyInventory(
   inventory: Inventory,
   destination: string,
+  options: { overwrite?: boolean } = {},
 ): Promise<void> {
   await mkdir(destination, { recursive: true });
   for (const relative of inventory.files) {
@@ -174,7 +202,7 @@ export async function copyInventory(
       if (!targetInfo.isFile()) continue;
       await mkdir(path.dirname(target), { recursive: true });
       await cp(resolved, target, {
-        force: false,
+        force: options.overwrite ?? false,
         mode: constants.COPYFILE_FICLONE,
       });
       continue;
@@ -182,7 +210,7 @@ export async function copyInventory(
     if (!info.isFile()) continue;
     await mkdir(path.dirname(target), { recursive: true });
     await cp(source, target, {
-      force: false,
+      force: options.overwrite ?? false,
       preserveTimestamps: true,
       mode: constants.COPYFILE_FICLONE,
     });
@@ -447,6 +475,7 @@ async function findWorkspaceLinks(
 export async function createDependencySnapshot(
   project: string,
   snapshot: string,
+  options: { copy?: boolean } = {},
 ): Promise<boolean> {
   const directories = (await findDependencyDirectories(project)).sort(
     (left, right) => left.localeCompare(right),
@@ -457,7 +486,16 @@ export async function createDependencySnapshot(
   for (const relative of directories) {
     const target = path.join(snapshot, relative);
     await mkdir(path.dirname(target), { recursive: true });
-    await rename(path.join(project, relative), target);
+    if (options.copy) {
+      await cp(path.join(project, relative), target, {
+        recursive: true,
+        force: false,
+        preserveTimestamps: true,
+        mode: constants.COPYFILE_FICLONE,
+      });
+    } else {
+      await rename(path.join(project, relative), target);
+    }
   }
   await writeJsonAtomic(path.join(snapshot, DEPENDENCY_SNAPSHOT_MARKER), {
     version: 1,

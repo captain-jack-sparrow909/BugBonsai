@@ -79,3 +79,28 @@ they are therefore launch evidence, not compatibility-scoreboard entries.
 Each result passed BugBonsai's recipient-side verification with installation
 disabled. Only aggregate metrics and normalized failure hashes were retained;
 no upstream source or generated reproduction is stored in this repository.
+
+## Public failure field validation
+
+On 2026-08-14, a pinned checkout of
+[`Teascade/typescript-error-demonstration`](https://github.com/Teascade/typescript-error-demonstration)
+at commit `e07b566143dc79437be4915db66f155ec9ca6515`, prepared according to its
+upstream npm-link instructions, reproduced the linked-package TS2742 failure reported in
+[`microsoft/TypeScript#58914`](https://github.com/microsoft/TypeScript/issues/58914).
+The run exposed two isolation gaps: required declarations in ignored `dist/`
+output were absent, and `--no-install` did not preserve the prepared workspace
+dependency links. After recovery was implemented, BugBonsai reduced 19 project
+files and 32.4 KB to 5 files and 1.33 KB in 6.1 seconds. It verified the TS2742
+oracle twice before reduction and three times afterward.
+
+This is engine field evidence, not a recipient-portability claim. The upstream
+case requires a manually prepared npm-link topology, and `--no-install` exports
+no dependency tree. Only the pinned revision, aggregate metrics, timing, and
+failure identity are recorded here; no upstream source or reproduction is
+stored in this repository.
+
+Additional candidates were intentionally excluded from compatibility evidence:
+the historical reproduction for
+[`microsoft/TypeScript#48212`](https://github.com/microsoft/TypeScript/issues/48212)
+requires pnpm 6, which does not run on the current Node 24 validation host, while
+the investigated Vite reproduction requires an interactive browser oracle.

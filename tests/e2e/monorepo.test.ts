@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -15,6 +22,148 @@ afterEach(async () => {
 });
 
 describe("monorepo invocation", () => {
+  it("snapshots existing workspace dependencies when installation is disabled", async () => {
+    const temporary = await mkdtemp(
+      path.join(os.tmpdir(), "bugbonsai-monorepo-no-install-dependencies-"),
+    );
+    created.push(temporary);
+    const root = path.join(temporary, "workspace");
+    const output = path.join(temporary, "repro");
+    const app = path.join(root, "packages", "app");
+    await mkdir(path.join(root, "node_modules"), { recursive: true });
+    await mkdir(path.join(app, "node_modules", "nested-only"), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({ private: true, type: "module" }),
+    );
+    await writeFile(
+      path.join(root, "run.mjs"),
+      [
+        'import workspace from "workspace-app";',
+        "throw new Error(`BUGBONSAI_NO_INSTALL_SENTINEL:${workspace}`);",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      path.join(app, "package.json"),
+      JSON.stringify({
+        name: "workspace-app",
+        private: true,
+        type: "module",
+        main: "index.mjs",
+      }),
+    );
+    await writeFile(
+      path.join(app, "index.mjs"),
+      'import nested from "nested-only"; export default `workspace:${nested}`;\n',
+    );
+    await writeFile(
+      path.join(app, "node_modules", "nested-only", "package.json"),
+      JSON.stringify({
+        name: "nested-only",
+        type: "module",
+        main: "index.mjs",
+      }),
+    );
+    await writeFile(
+      path.join(app, "node_modules", "nested-only", "index.mjs"),
+      'export default "nested";\n',
+    );
+    await symlink(
+      app,
+      path.join(root, "node_modules", "workspace-app"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    process.env.BUGBONSAI_CACHE_DIR = path.join(temporary, "cache");
+
+    const reduced = await reduceProject({
+      root,
+      cwd: root,
+      command: [process.execPath, "run.mjs"],
+      output,
+      match: "BUGBONSAI_NO_INSTALL_SENTINEL:workspace:nested",
+      noInstall: true,
+      onlyReducers: ["files"],
+      stabilityRuns: 1,
+      finalRuns: 1,
+      maxRuns: 25,
+    });
+
+    expect(reduced.baseline.normalizedLines.join("\n")).toContain(
+      "BUGBONSAI_NO_INSTALL_SENTINEL:workspace:nested",
+    );
+    expect(
+      reduced.attempts.every((attempt) => attempt.reducer !== "dependencies"),
+    ).toBe(true);
+  });
+
+  it("recovers a failure that depends on gitignored generated output", async () => {
+    const temporary = await mkdtemp(
+      path.join(os.tmpdir(), "bugbonsai-monorepo-ignored-output-"),
+    );
+    created.push(temporary);
+    const root = path.join(temporary, "workspace");
+    const output = path.join(temporary, "repro");
+    await mkdir(path.join(root, "dist"), { recursive: true });
+    await writeFile(path.join(root, ".gitignore"), "dist/\n");
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({ private: true, type: "module" }),
+    );
+    await writeFile(
+      path.join(root, "run.mjs"),
+      [
+        'import { writeFile } from "node:fs/promises";',
+        'await writeFile("dist/runtime-output.txt", "generated during failure\\n");',
+        'await import("./dist/failure.mjs");',
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      path.join(root, "dist", "failure.mjs"),
+      "throw new Error('BUGBONSAI_IGNORED_OUTPUT_SENTINEL');\n",
+    );
+    await writeFile(
+      path.join(root, "dist", "unused.mjs"),
+      "export default 'unused';\n",
+    );
+    const initialized = await runCommand(["git", "init", "--quiet"], {
+      cwd: root,
+      timeoutMs: 5_000,
+    });
+    expect(initialized.exitCode).toBe(0);
+    process.env.BUGBONSAI_CACHE_DIR = path.join(temporary, "cache");
+    const progress: string[] = [];
+
+    const reduced = await reduceProject({
+      root,
+      cwd: root,
+      command: [process.execPath, "run.mjs"],
+      output,
+      match: "BUGBONSAI_IGNORED_OUTPUT_SENTINEL",
+      noInstall: true,
+      stabilityRuns: 1,
+      finalRuns: 1,
+      maxRuns: 25,
+      onProgress: (event) => progress.push(event.message),
+    });
+
+    expect(progress).toContain("Retrying with 2 safe gitignored files");
+    expect(reduced.originalMetrics.files).toBe(5);
+    expect(
+      await readFile(path.join(output, "dist", "failure.mjs"), "utf8"),
+    ).toContain("BUGBONSAI_IGNORED_OUTPUT_SENTINEL");
+    expect(reduced.candidateRuns).toBeLessThan(25);
+    await expect(
+      readFile(path.join(output, "dist", "runtime-output.txt"), "utf8"),
+    ).rejects.toThrow();
+    await expect(
+      readFile(path.join(output, "dist", "unused.mjs"), "utf8"),
+    ).rejects.toThrow();
+  });
+
   it("reduces from an ancestor root while preserving the nested command cwd", async () => {
     const temporary = await mkdtemp(
       path.join(os.tmpdir(), "bugbonsai-monorepo-"),
