@@ -51,9 +51,11 @@ describe("monorepo invocation", () => {
         'const dependency = await realpath("node_modules/next/package.json");',
         "const relative = path.relative(project, dependency);",
         'if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {',
-        '  throw new Error("NEXT_DEPENDENCY_ESCAPED_PROJECT_ROOT");',
+        '  console.error("NEXT_DEPENDENCY_ESCAPED_PROJECT_ROOT");',
+        "} else {",
+        '  console.error("NEXT_MATERIALIZED_DEPENDENCY_SENTINEL");',
         "}",
-        'throw new Error("NEXT_MATERIALIZED_DEPENDENCY_SENTINEL");',
+        "process.exitCode = 1;",
         "",
       ].join("\n"),
     );
