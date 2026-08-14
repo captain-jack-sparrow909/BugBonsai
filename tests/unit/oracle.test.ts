@@ -123,6 +123,25 @@ describe("DefaultFailureOracle", () => {
     ).toBe(false);
   });
 
+  it("treats an explicit output marker as decisive across stack-path drift", async () => {
+    const oracle = new DefaultFailureOracle({
+      failOnOutput: "PORTABLE_OUTPUT_SENTINEL",
+    });
+    const baseline = await oracle.capture(
+      result(
+        "Error: PORTABLE_OUTPUT_SENTINEL\n at run (/tmp/project/source/run.mjs:2:1)",
+      ),
+    );
+    const match = await oracle.matches(
+      baseline,
+      result(
+        "Error: PORTABLE_OUTPUT_SENTINEL\n at run (D:/workspace/repro/run.mjs:2:1)",
+      ),
+    );
+
+    expect(match.matches).toBe(true);
+  });
+
   it("does not replace an output-detected success with a crashing command", async () => {
     const oracle = new DefaultFailureOracle({
       failOnOutput: "TYPE_DOC_WARNING",
