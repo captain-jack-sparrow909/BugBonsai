@@ -1,0 +1,6 @@
+{
+  "name": "docs-workspace",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs"
+}

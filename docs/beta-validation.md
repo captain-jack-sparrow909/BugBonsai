@@ -13,6 +13,8 @@ portable reproduction. The current corpus covers:
 - deep JavaScript AST reduction;
 - a real TypeScript compiler diagnostic;
 - a TypeScript declaration-merging failure whose identity depends on file order;
+- a TypeDoc-shaped zero-exit warning with ESM sibling dependencies, a workspace
+  package link, and a workspace-local installation;
 - a real Vitest assertion failure;
 - a real Jest assertion failure with test-structure reduction;
 - a real Vite build failure;

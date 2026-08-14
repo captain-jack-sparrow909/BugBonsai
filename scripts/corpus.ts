@@ -15,7 +15,10 @@ interface CorpusCase {
   category: string;
   fixture: string;
   command: string[];
-  match: string;
+  match?: string;
+  failOnOutput?: string;
+  installCommand?: string[];
+  noInstall?: boolean;
   mode?: "fast" | "balanced" | "thorough";
   maxRuns: number;
   reducers: string[];
@@ -110,15 +113,23 @@ async function assertExpectations(
 try {
   const results = [];
   for (const testCase of manifest.cases) {
+    if (Boolean(testCase.match) === Boolean(testCase.failOnOutput))
+      throw new Error(
+        `${testCase.id}: choose exactly one of match or failOnOutput.`,
+      );
     const fixture = path.resolve(root, testCase.fixture);
     const output = path.join(temporary, testCase.id);
     const result = await reduceProject({
       cwd: fixture,
       command: resolveCommand(testCase.command),
       output,
-      match: testCase.match,
+      ...(testCase.match ? { match: testCase.match } : {}),
+      ...(testCase.failOnOutput ? { failOnOutput: testCase.failOnOutput } : {}),
+      ...(testCase.installCommand
+        ? { installCommand: resolveCommand(testCase.installCommand) }
+        : {}),
       mode: testCase.mode ?? "balanced",
-      noInstall: true,
+      noInstall: testCase.noInstall ?? true,
       stabilityRuns: 1,
       finalRuns: 1,
       maxRuns: testCase.maxRuns,
@@ -126,7 +137,9 @@ try {
       outputMode: "quiet",
     });
     await assertExpectations(testCase, result);
-    await verifyReproduction(output, { install: false });
+    await verifyReproduction(output, {
+      install: !(testCase.noInstall ?? true),
+    });
     results.push({
       id: testCase.id,
       category: testCase.category,

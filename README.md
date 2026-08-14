@@ -223,7 +223,7 @@ Use `--archive ./repro.zip` for a deterministic ZIP plus `.sha256` sidecar, `--d
 
 ## Package managers
 
-npm and pnpm are the primary validated paths. Package-manager declarations, every detected lockfile, and npm/pnpm workspace layouts are recorded in diagnostics and reports. If several package-manager lockfiles exist without an authoritative `packageManager` declaration, BugBonsai stops and asks for an explicit declaration or `--install-command` instead of guessing.
+npm and pnpm are the primary validated paths. Package-manager declarations, every detected lockfile, and npm/pnpm workspace layouts are recorded in diagnostics and reports. Root and workspace-local dependency trees are snapshotted separately, and workspace package links are recreated inside each disposable candidate. If several package-manager lockfiles exist without an authoritative `packageManager` declaration, BugBonsai stops and asks for an explicit declaration or `--install-command` instead of guessing.
 
 Accepted dependency removals regenerate installation metadata in the isolated candidate and verify that the selected lockfile remains present. Yarn and Bun are detected and have conservative install commands, but complex workspace and Plug'n'Play layouts still require additional field validation.
 

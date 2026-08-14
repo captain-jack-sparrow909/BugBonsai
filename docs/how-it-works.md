@@ -10,7 +10,7 @@ Session schema 4 persists the exact reducer index, accepted generation, determin
 
 Before preparation and command execution, BugBonsai fingerprints the complete candidate tree. Rejections are cached against that content plus the command, baseline, oracle, version, invocation directory, and a one-way environment fingerprint. Cache entries contain only the rejection score and reason. Accepted outcomes are deliberately not cached: every accepted mutation must still execute the failure command.
 
-When dependency metadata changes, the candidate receives a private filesystem copy of the last accepted installation snapshot before the mutable package-manager install. The package manager can reuse prepared package contents, but its changes remain candidate-local. If accepted, that installed tree becomes the next snapshot; if rejected, it is discarded.
+Dependency snapshots mirror every root and workspace-local `node_modules` directory. Their physical layout retains the `node_modules` boundary required by Node ESM resolution. Disposable candidates receive package-level links into the immutable snapshot, with workspace symlinks recreated against that candidate's source tree. When dependency metadata changes, the candidate instead receives a private filesystem copy before the mutable package-manager install. If accepted, all installed trees become the next snapshot; if rejected, they are discarded.
 
 Reduction progress events include consumed and remaining run budget, normalized budget progress, and an ETA derived from completed uncached candidate durations. The ETA is deliberately a worst-case budget estimate because productive reductions may finish before every available run is consumed.
 
