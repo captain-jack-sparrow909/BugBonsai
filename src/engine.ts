@@ -22,12 +22,16 @@ import {
   copyInventory,
   copyProject,
   cacheRoot,
+  createDependencySnapshot,
   createInventory,
   createSession,
   fingerprintProject,
   linkDependencies,
   loadState,
+  materializeDependencies,
   metrics,
+  normalizeDependencySnapshot,
+  removeDependencies,
   saveState,
 } from "./sandbox.js";
 import { auditPortability, scanSecurity } from "./security.js";
@@ -298,7 +302,12 @@ async function install(
   afterManifestChange = false,
 ): Promise<void> {
   if (options.noInstall) return;
-  if (!afterManifestChange && !(await projectHasDependencies(root))) return;
+  if (
+    !afterManifestChange &&
+    !options.installCommand &&
+    !(await projectHasDependencies(root))
+  )
+    return;
   const result = await runCommand(
     afterManifestChange
       ? manager.installAfterManifestChange
@@ -447,16 +456,10 @@ async function evaluateMutation(input: {
   let dependencySnapshotReused = false;
   if (input.mutation.requiresInstall) {
     if (await pathExists(input.dependencies)) {
-      await copyProject(
-        input.dependencies,
-        path.join(input.candidate, "node_modules"),
-        { includeNodeModules: true },
-      );
+      await materializeDependencies(input.dependencies, input.candidate);
       dependencySnapshotReused = true;
     }
     await install(input.candidate, input.manager, input.options, true);
-    const installed = path.join(input.candidate, "node_modules");
-    if (await pathExists(installed)) candidateDependencies = installed;
   } else {
     await linkDependencies(input.dependencies, input.candidate);
   }
@@ -471,6 +474,11 @@ async function evaluateMutation(input: {
   });
   throwIfAborted(input.options);
   const match = await input.oracle.matches(input.baseline, result);
+  if (input.mutation.requiresInstall && match.matches) {
+    const snapshot = `${input.candidate}.dependency-snapshot`;
+    if (await createDependencySnapshot(input.candidate, snapshot))
+      candidateDependencies = snapshot;
+  }
   return {
     attempt: {
       mutationId: input.mutation.id,
@@ -544,9 +552,7 @@ async function promoteCandidate(
   await rename(best, backup);
   try {
     await rename(candidate, best);
-    const linkedModules = path.join(best, "node_modules");
-    if (await pathExists(linkedModules))
-      await rm(linkedModules, { recursive: true, force: true });
+    await removeDependencies(best);
     await rm(backup, { recursive: true, force: true });
   } catch (error) {
     if (await pathExists(backup)) await rename(backup, best);
@@ -635,7 +641,7 @@ async function reduceProjectInternal(
   const scratch = path.join(session, "scratch");
   let dependencies = resume?.state.dependencySnapshot
     ? path.join(session, resume.state.dependencySnapshot)
-    : path.join(session, "dependencies");
+    : path.join(session, "dependency-snapshot-0");
   await mkdir(scratch, { recursive: true });
 
   const state: RunState = resume?.state ?? {
@@ -661,6 +667,13 @@ async function reduceProjectInternal(
     },
     elapsedMs: 0,
   };
+  if (resume && state.dependencySnapshot) {
+    const normalized = await normalizeDependencySnapshot(dependencies);
+    if (normalized !== dependencies) {
+      dependencies = normalized;
+      state.dependencySnapshot = path.relative(session, dependencies);
+    }
+  }
   const elapsedBeforeTurn = state.elapsedMs;
   const resumeWasPaused = Boolean(resume && state.status === "paused");
   let exportCreated = false;
@@ -711,9 +724,7 @@ async function reduceProjectInternal(
     );
     if (!resume) {
       await install(seed, manager, options);
-      const installed = path.join(seed, "node_modules");
-      if (await pathExists(installed)) {
-        await rename(installed, dependencies);
+      if (await createDependencySnapshot(seed, dependencies)) {
         state.dependencySnapshot = path.relative(session, dependencies);
       }
       await copyProject(seed, best);
@@ -911,7 +922,7 @@ async function reduceProjectInternal(
               if (evaluation.candidateDependencies) {
                 const nextDependencies = path.join(
                   session,
-                  `dependencies-${state.generation + 1}`,
+                  `dependency-snapshot-${state.generation + 1}`,
                 );
                 await rename(
                   evaluation.candidateDependencies,

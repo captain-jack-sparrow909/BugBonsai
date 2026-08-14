@@ -73,6 +73,20 @@
       }
     },
     {
+      "id": "typedoc-workspace-warning",
+      "category": "documentation",
+      "fixture": "fixtures/typedoc-workspace-warning",
+      "command": ["{node}", "runner.mjs"],
+      "failOnOutput": "Failed to resolve link to \"Promise\" in comment",
+      "installCommand": ["{node}", "install.mjs"],
+      "noInstall": false,
+      "maxRuns": 4,
+      "reducers": ["dependencies"],
+      "expect": {
+        "maxCandidateRuns": 4
+      }
+    },
+    {
       "id": "vitest-assertion-failure",
       "category": "test-runner",
       "fixture": "fixtures/vitest-real",
