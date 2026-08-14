@@ -22,6 +22,64 @@ afterEach(async () => {
 });
 
 describe("monorepo invocation", () => {
+  it("materializes dependency snapshots for hermetic Next.js resolution", async () => {
+    const temporary = await mkdtemp(
+      path.join(os.tmpdir(), "bugbonsai-next-materialized-dependencies-"),
+    );
+    created.push(temporary);
+    const root = path.join(temporary, "project");
+    const output = path.join(temporary, "repro");
+    await mkdir(path.join(root, "node_modules", "next"), { recursive: true });
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        private: true,
+        type: "module",
+        dependencies: { next: "0.0.0-fixture" },
+      }),
+    );
+    await writeFile(
+      path.join(root, "node_modules", "next", "package.json"),
+      JSON.stringify({ name: "next", version: "0.0.0-fixture" }),
+    );
+    await writeFile(
+      path.join(root, "failure.mjs"),
+      [
+        'import { realpath } from "node:fs/promises";',
+        'import path from "node:path";',
+        'const project = await realpath(".");',
+        'const dependency = await realpath("node_modules/next/package.json");',
+        "if (!dependency.startsWith(`${project}${path.sep}`)) {",
+        '  throw new Error("NEXT_DEPENDENCY_ESCAPED_PROJECT_ROOT");',
+        "}",
+        'throw new Error("NEXT_MATERIALIZED_DEPENDENCY_SENTINEL");',
+        "",
+      ].join("\n"),
+    );
+    process.env.BUGBONSAI_CACHE_DIR = path.join(temporary, "cache");
+
+    const reduced = await reduceProject({
+      root,
+      cwd: root,
+      command: [process.execPath, "failure.mjs"],
+      output,
+      match: "NEXT_MATERIALIZED_DEPENDENCY_SENTINEL",
+      noInstall: true,
+      onlyReducers: ["files"],
+      stabilityRuns: 1,
+      finalRuns: 1,
+      maxRuns: 10,
+    });
+
+    expect(reduced.detectedAdapters).toContain("next");
+    expect(reduced.finalSignature.normalizedLines.join("\n")).toContain(
+      "NEXT_MATERIALIZED_DEPENDENCY_SENTINEL",
+    );
+    await expect(
+      readFile(path.join(output, "node_modules", "next", "package.json")),
+    ).rejects.toThrow();
+  });
+
   it("snapshots existing workspace dependencies when installation is disabled", async () => {
     const temporary = await mkdtemp(
       path.join(os.tmpdir(), "bugbonsai-monorepo-no-install-dependencies-"),

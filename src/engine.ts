@@ -342,8 +342,11 @@ async function executeWithDependencies(
   root: string,
   dependencies: string,
   options: ResolvedOptions,
+  materializeDependencySnapshot: boolean,
 ): ReturnType<typeof runCommand> {
-  await linkDependencies(dependencies, root);
+  if (materializeDependencySnapshot)
+    await materializeDependencies(dependencies, root);
+  else await linkDependencies(dependencies, root);
   return runCommand(options.command, {
     cwd: path.join(root, path.relative(options.root, options.cwd)),
     timeoutMs: options.timeoutMs,
@@ -358,6 +361,7 @@ async function captureBaseline(
   scratch: string,
   options: ResolvedOptions,
   oracle: FailureOracle,
+  materializeDependencySnapshot: boolean,
 ): Promise<FailureSignature> {
   let baseline: FailureSignature | undefined;
   for (let run = 0; run < options.stabilityRuns; run += 1) {
@@ -368,6 +372,7 @@ async function captureBaseline(
       candidate,
       dependencies,
       options,
+      materializeDependencySnapshot,
     );
     throwIfAborted(options);
     if (!baseline) {
@@ -421,6 +426,7 @@ async function evaluateMutation(input: {
   baseline: FailureSignature;
   cache: Record<string, CandidateCacheEntry>;
   executionFingerprint: string;
+  materializeDependencySnapshot: boolean;
 }): Promise<{
   attempt: ReductionAttempt;
   signature: FailureSignature;
@@ -468,11 +474,16 @@ async function evaluateMutation(input: {
       if (await createDependencySnapshot(input.candidate, snapshot))
         candidateDependencies = snapshot;
       await copyProject(input.candidate, execution);
-      if (candidateDependencies)
-        await linkDependencies(candidateDependencies, execution);
+      if (candidateDependencies) {
+        if (input.materializeDependencySnapshot)
+          await materializeDependencies(candidateDependencies, execution);
+        else await linkDependencies(candidateDependencies, execution);
+      }
     } else {
       await copyProject(input.candidate, execution);
-      await linkDependencies(input.dependencies, execution);
+      if (input.materializeDependencySnapshot)
+        await materializeDependencies(input.dependencies, execution);
+      else await linkDependencies(input.dependencies, execution);
     }
     const result = await runCommand(input.options.command, {
       cwd: path.join(
@@ -738,6 +749,9 @@ async function reduceProjectInternal(
       },
       plugins.adapters,
     );
+    const materializeDependencySnapshot = adapterMatches.some(
+      (match) => match.name === "next",
+    );
     if (!resume) {
       await install(seed, manager, options);
       const dependencySource = options.noInstall ? options.root : seed;
@@ -786,6 +800,7 @@ async function reduceProjectInternal(
           scratch,
           options,
           oracle,
+          materializeDependencySnapshot,
         );
       } catch (error) {
         const ignoredInventory =
@@ -824,6 +839,7 @@ async function reduceProjectInternal(
             scratch,
             options,
             oracle,
+            materializeDependencySnapshot,
           );
         } catch (recoveryError) {
           if (
@@ -966,6 +982,7 @@ async function reduceProjectInternal(
               baseline,
               cache: state.cache,
               executionFingerprint,
+              materializeDependencySnapshot,
             });
           } catch (error) {
             if (options.signal?.aborted) throw error;
@@ -1083,7 +1100,11 @@ async function reduceProjectInternal(
     const validation = path.join(scratch, "final-validation");
     await copyProject(options.output, validation);
     await install(validation, manager, options);
-    if (options.noInstall) await linkDependencies(dependencies, validation);
+    if (options.noInstall) {
+      if (materializeDependencySnapshot)
+        await materializeDependencies(dependencies, validation);
+      else await linkDependencies(dependencies, validation);
+    }
     let finalSignature = baseline;
     for (let run = 0; run < options.finalRuns; run += 1) {
       throwIfAborted(options);

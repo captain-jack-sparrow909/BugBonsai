@@ -11,7 +11,9 @@ As of 2026-08-14, `0.1.0-beta.3` is published and the public beta feedback
 thread has no confirmed external BugBonsai run. A reply on an upstream issue is
 not counted unless the participant says they ran the package or provides
 aggregate run evidence. The project therefore has no basis for claiming
-real-user adoption or ecosystem success yet.
+real-user adoption or ecosystem success yet. Maintainer-run public failure
+investigations are recorded separately as field evidence and do not count as
+external adoption.
 
 Canonical feedback thread:
 https://github.com/captain-jack-sparrow909/BugBonsai/issues/9
@@ -28,6 +30,14 @@ operating-system matrix as the existing compatibility cases. A local pass is not
 enough to call them verified; the status is confirmed only after the complete CI
 matrix passes.
 
+A pinned Next.js 16.3.1/Turbopack public reproduction also exposed a hermetic
+dependency-resolution gap in `0.1.0-beta.3`. The local fix materializes the
+dependency snapshot inside each disposable candidate, preserved the intended
+failure across the complete reduction, and added a source-independent
+regression test for the realpath invariant. This is field-discovered engine
+evidence; it is not external adoption, recipient verification, or a promoted
+compatibility case.
+
 The initial local corpus run used Node 24.18.0 on macOS arm64 and produced:
 
 | Case                   | Candidate runs | File reduction | Byte reduction | Recipient verification |
@@ -35,8 +45,9 @@ The initial local corpus run used Node 24.18.0 on macOS arm64 and produced:
 | Jest assertion failure |              3 |             0% |          23.3% | Passed                 |
 | Vite build failure     |              2 |            60% |          39.6% | Passed                 |
 
-Next.js remains experimental because only adapter evidence exists. Yarn Plug'n'Play
-and Bun workspaces remain experimental for the same reason.
+Next.js remains experimental because field and adapter evidence still lacks a
+portable corpus case and cross-platform recipient verification. Yarn Plug'n'Play
+and Bun workspaces remain experimental because only adapter evidence exists.
 
 ## Weekly triage loop
 
