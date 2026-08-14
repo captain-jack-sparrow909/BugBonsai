@@ -27,6 +27,7 @@ interface CliOptions {
   output?: string;
   match?: string;
   matchRegex?: string;
+  failOnOutput?: string;
   exitCode?: string;
   timeout: string;
   stabilityRuns: string;
@@ -82,6 +83,11 @@ export function createProgram(config: BugBonsaiConfig): Command {
       "--match-regex <pattern>",
       "require normalized failure output to match a regular expression",
       config.matchRegex,
+    )
+    .option(
+      "--fail-on-output <text>",
+      "treat matching output as failure, even when the command exits 0",
+      config.failOnOutput,
     )
     .option(
       "--exit-code <number>",
@@ -194,7 +200,7 @@ export function createProgram(config: BugBonsaiConfig): Command {
     .option("--no-color", "disable colors")
     .addHelpText(
       "after",
-      `\nCommands:\n  $ bugbonsai verify [directory] [--no-install] [--timeout 60s] [--json]\n\nExamples:\n  $ bugbonsai -- npm test\n  $ bugbonsai --match "Hydration failed" -- pnpm build\n  $ bugbonsai --mode fast -- node failing-script.js`,
+      `\nCommands:\n  $ bugbonsai verify [directory] [--no-install] [--timeout 60s] [--json]\n\nExamples:\n  $ bugbonsai -- npm test\n  $ bugbonsai --match "Hydration failed" -- pnpm build\n  $ bugbonsai --fail-on-output "Failed to resolve link" -- npm run docs\n  $ bugbonsai --mode fast -- node failing-script.js`,
     )
     .exitOverride();
 }
@@ -452,7 +458,7 @@ async function main(): Promise<void> {
     program.outputHelp();
     throw new BugBonsaiError(
       "INVALID_INPUT",
-      "Provide a failing command after --.",
+      "Provide a command to reduce after --.",
     );
   }
   if (!options.color || process.env.NO_COLOR) pc.isColorSupported = false;
@@ -468,6 +474,11 @@ async function main(): Promise<void> {
   const explicitOracle = program.getOptionValueSource("oracle") === "cli";
   const explicitPluginOracle =
     program.getOptionValueSource("pluginOracle") === "cli";
+  const explicitMatch = program.getOptionValueSource("match") === "cli";
+  const explicitMatchRegex =
+    program.getOptionValueSource("matchRegex") === "cli";
+  const explicitFailOnOutput =
+    program.getOptionValueSource("failOnOutput") === "cli";
   if (explicitJson && explicitQuiet) {
     throw new BugBonsaiError(
       "INVALID_INPUT",
@@ -482,6 +493,25 @@ async function main(): Promise<void> {
       "Choose either --oracle or --plugin-oracle, not both.",
     );
   }
+  if (
+    explicitFailOnOutput &&
+    (explicitMatch ||
+      explicitMatchRegex ||
+      explicitOracle ||
+      explicitPluginOracle)
+  ) {
+    throw new BugBonsaiError(
+      "INVALID_INPUT",
+      "Choose --fail-on-output or another explicit oracle option, not both.",
+    );
+  }
+  const useFailOnOutput = Boolean(
+    options.failOnOutput &&
+    !explicitMatch &&
+    !explicitMatchRegex &&
+    !explicitOracle &&
+    !explicitPluginOracle,
+  );
   if (!json && !quiet) {
     process.stderr.write(`${pc.green("🌱")} ${pc.bold("BugBonsai")}\n\n`);
     process.stderr.write(
@@ -508,15 +538,20 @@ async function main(): Promise<void> {
     verbose: Boolean(options.verbose),
     signal: abort.signal,
     ...(options.output ? { output: options.output } : {}),
-    ...(options.match ? { match: options.match } : {}),
-    ...(options.matchRegex ? { matchRegex: options.matchRegex } : {}),
+    ...(options.match && !explicitFailOnOutput ? { match: options.match } : {}),
+    ...(options.matchRegex && !explicitFailOnOutput
+      ? { matchRegex: options.matchRegex }
+      : {}),
+    ...(useFailOnOutput && options.failOnOutput
+      ? { failOnOutput: options.failOnOutput }
+      : {}),
     ...(options.exitCode !== undefined
       ? { exitCode: Number(options.exitCode) }
       : {}),
-    ...(options.oracle && !explicitPluginOracle
+    ...(options.oracle && !explicitPluginOracle && !explicitFailOnOutput
       ? { oraclePath: options.oracle }
       : {}),
-    ...(options.pluginOracle && !explicitOracle
+    ...(options.pluginOracle && !explicitOracle && !explicitFailOnOutput
       ? { pluginOracle: options.pluginOracle }
       : {}),
     plugins: options.plugin,

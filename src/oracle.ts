@@ -185,6 +185,7 @@ function frameOverlap(
 export interface DefaultOracleOptions {
   match?: string;
   matchRegex?: string;
+  failOnOutput?: string;
   exitCode?: number;
   threshold?: number;
 }
@@ -199,7 +200,12 @@ export class DefaultFailureOracle implements FailureOracle {
   }
 
   async capture(result: CommandResult): Promise<FailureSignature> {
-    if (result.exitCode === 0 && !result.timedOut && !result.signal) {
+    if (
+      result.exitCode === 0 &&
+      !result.timedOut &&
+      !result.signal &&
+      !this.#options.failOnOutput
+    ) {
       throw new Error(
         "The supplied command succeeded; BugBonsai needs a failing command.",
       );
@@ -217,6 +223,14 @@ export class DefaultFailureOracle implements FailureOracle {
         `The baseline did not contain required text: ${this.#options.match}`,
       );
     }
+    if (
+      this.#options.failOnOutput &&
+      !normalized.includes(this.#options.failOnOutput)
+    ) {
+      throw new Error(
+        `The baseline did not contain failure output: ${this.#options.failOnOutput}`,
+      );
+    }
     if (this.#regex && !this.#regex.test(normalized)) {
       this.#regex.lastIndex = 0;
       throw new Error(
@@ -232,11 +246,26 @@ export class DefaultFailureOracle implements FailureOracle {
     candidate: CommandResult,
   ): Promise<OracleMatch> {
     const signature = createSignature(candidate);
-    if (candidate.exitCode === 0 && !candidate.timedOut && !candidate.signal) {
+    const baselineSucceeded =
+      baseline.exitCode === 0 && !baseline.timedOut && !baseline.signal;
+    const candidateSucceeded =
+      candidate.exitCode === 0 && !candidate.timedOut && !candidate.signal;
+    if (candidateSucceeded && !this.#options.failOnOutput) {
       return {
         matches: false,
         score: 0,
         reason: "candidate command succeeded",
+        signature,
+      };
+    }
+    if (
+      this.#options.failOnOutput &&
+      baselineSucceeded !== candidateSucceeded
+    ) {
+      return {
+        matches: false,
+        score: 0,
+        reason: "command exit behavior changed",
         signature,
       };
     }
@@ -265,6 +294,17 @@ export class DefaultFailureOracle implements FailureOracle {
         matches: false,
         score: 0,
         reason: `required text was not present: ${this.#options.match}`,
+        signature,
+      };
+    }
+    if (
+      this.#options.failOnOutput &&
+      !normalized.includes(this.#options.failOnOutput)
+    ) {
+      return {
+        matches: false,
+        score: 0,
+        reason: `failure output was not present: ${this.#options.failOnOutput}`,
         signature,
       };
     }
@@ -299,7 +339,9 @@ export class DefaultFailureOracle implements FailureOracle {
       baseline.stackFrames,
       signature.stackFrames,
     );
-    const explicit = Boolean(this.#options.match || this.#regex);
+    const explicit = Boolean(
+      this.#options.match || this.#options.failOnOutput || this.#regex,
+    );
     const threshold = this.#options.threshold ?? (explicit ? 0.12 : 0.42);
     const matches = identityMatches && stackMatches && score >= threshold;
     const reason = !identityMatches

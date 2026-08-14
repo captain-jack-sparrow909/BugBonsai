@@ -44,6 +44,23 @@ export async function verifyReproduction(
         manifest.installCommand.length === 0 ||
         manifest.installCommand.some((part) => typeof part !== "string"))) ||
     typeof manifest.invocationDirectory !== "string" ||
+    (manifest.oracle !== undefined &&
+      (!manifest.oracle ||
+        typeof manifest.oracle !== "object" ||
+        Array.isArray(manifest.oracle) ||
+        Object.keys(manifest.oracle).some(
+          (key) =>
+            !["match", "matchRegex", "failOnOutput", "exitCode"].includes(key),
+        ) ||
+        [
+          manifest.oracle.match,
+          manifest.oracle.matchRegex,
+          manifest.oracle.failOnOutput,
+        ].some((value) => value !== undefined && typeof value !== "string") ||
+        (manifest.oracle.failOnOutput !== undefined &&
+          manifest.oracle.failOnOutput.trim().length === 0) ||
+        (manifest.oracle.exitCode !== undefined &&
+          !Number.isInteger(manifest.oracle.exitCode)))) ||
     !Array.isArray(manifest.files) ||
     manifest.files.some(
       (entry) =>
@@ -119,7 +136,7 @@ export async function verifyReproduction(
     verbose: options.verbose ?? false,
     ...(options.signal ? { signal: options.signal } : {}),
   });
-  const oracle = new DefaultFailureOracle();
+  const oracle = new DefaultFailureOracle(manifest.oracle);
   const match = await oracle.matches(manifest.failureSignature, execution);
   if (!match.matches)
     throw new BugBonsaiError(

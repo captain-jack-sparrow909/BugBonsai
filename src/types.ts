@@ -55,6 +55,7 @@ export interface ReductionOptions {
   mode?: ReductionMode;
   match?: string;
   matchRegex?: string;
+  failOnOutput?: string;
   exitCode?: number;
   oraclePath?: string;
   pluginOracle?: string;
@@ -190,6 +191,7 @@ export interface ResolvedOptions extends Required<
 > {
   match?: string;
   matchRegex?: string;
+  failOnOutput?: string;
   exitCode?: number;
   oraclePath?: string;
   pluginOracle?: string;
@@ -249,6 +251,7 @@ export interface BugBonsaiConfig extends Omit<
   oracle?: {
     match?: string;
     matchRegex?: string;
+    failOnOutput?: string;
     exitCode?: number;
     path?: string;
     plugin?: string;

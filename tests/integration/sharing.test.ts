@@ -18,6 +18,49 @@ afterEach(async () => {
 });
 
 describe("portable sharing artifacts", () => {
+  it("exports and verifies a successful command with failure output", async () => {
+    const temporary = await mkdtemp(
+      path.join(os.tmpdir(), "bugbonsai-output-failure-"),
+    );
+    created.push(temporary);
+    const project = path.join(temporary, "project");
+    await mkdir(project);
+    await writeFile(
+      path.join(project, "package.json"),
+      JSON.stringify({ name: "output-failure-fixture", private: true }),
+    );
+    await writeFile(
+      path.join(project, "warning.js"),
+      'console.warn("TYPE_DOC_WARNING: Promise link unresolved");\n',
+    );
+    await writeFile(path.join(project, "noise.txt"), "remove me\n");
+    process.env.BUGBONSAI_CACHE_DIR = path.join(temporary, "cache");
+    const output = path.join(temporary, "repro");
+
+    await reduceProject({
+      cwd: project,
+      command: [process.execPath, "warning.js"],
+      output,
+      failOnOutput: "TYPE_DOC_WARNING",
+      noInstall: true,
+      stabilityRuns: 1,
+      finalRuns: 1,
+      maxRuns: 10,
+      onlyReducers: ["files"],
+    });
+
+    const manifest = JSON.parse(
+      await readFile(path.join(output, "bugbonsai-manifest.json"), "utf8"),
+    ) as PortabilityManifest;
+    expect(manifest.oracle).toEqual({ failOnOutput: "TYPE_DOC_WARNING" });
+    await expect(
+      verifyReproduction(output, { install: false }),
+    ).resolves.toMatchObject({
+      integrityVerified: true,
+      failureVerified: true,
+    });
+  });
+
   it("archives, verifies, and detects tampering before execution", async () => {
     const temporary = await mkdtemp(
       path.join(os.tmpdir(), "bugbonsai-sharing-"),

@@ -60,4 +60,10 @@ describe("BugBonsai configuration", () => {
       pluginOracle: "scope/sentinel",
     });
   });
+
+  it("normalizes an output-detected failure oracle", () => {
+    expect(
+      validateConfig({ oracle: { failOnOutput: "TYPE_DOC_WARNING" } }),
+    ).toMatchObject({ failOnOutput: "TYPE_DOC_WARNING" });
+  });
 });

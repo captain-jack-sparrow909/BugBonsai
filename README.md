@@ -29,6 +29,7 @@ For a noisy failure, provide a distinctive fragment:
 ```bash
 npx bugbonsai --match "Hydration failed" -- pnpm build
 npx bugbonsai --match-regex "TS\\d{4}" -- pnpm typecheck
+npx bugbonsai --fail-on-output "Failed to resolve link" -- npm run docs
 ```
 
 BugBonsai writes the verified reproduction to `./bugbonsai-repro` by default:
@@ -99,6 +100,7 @@ bugbonsai [options] -- <command> [...arguments]
 --root <directory>
 --match <text>
 --match-regex <pattern>
+--fail-on-output <text>
 --exit-code <number>
 --oracle <file>
 --plugin <specifier>
@@ -173,7 +175,7 @@ bugbonsai clean --all
 
 The default oracle combines exit behavior, error identity, normalized output tokens, and stack-frame overlap. It rejects common candidate-created setup failures such as missing modules unless that was the original failure.
 
-Use `--match` when the output contains a stable sentinel. Use `--match-regex` for variable but structured errors. `--exit-code` is a secondary constraint and should not be used as the only evidence when many unrelated failures share the same code.
+Use `--match` when a failing command contains a stable sentinel. Use `--match-regex` for variable but structured errors. For warnings, diagnostics, or incorrect output from a command that exits successfully, use `--fail-on-output`; BugBonsai then treats that text as the failure and rejects candidates that change the command to a real crash. `--exit-code` is a secondary constraint and should not be used as the only evidence when many unrelated failures share the same code.
 
 When output matching is domain-specific, provide a trusted local ESM predicate with `--oracle ./bugbonsai.oracle.mjs`. See [docs/failure-oracles.md](docs/failure-oracles.md).
 
