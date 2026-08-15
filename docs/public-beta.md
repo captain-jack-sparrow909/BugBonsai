@@ -15,15 +15,35 @@ npx bugbonsai@beta -- npm test
 Pin the exact version when recording a reproducible observation:
 
 ```bash
-npx bugbonsai@0.1.0-beta.0 --version
+npx bugbonsai@0.1.0-beta.3 --version
 ```
 
 The one-time package bootstrap caused npm's required `latest` tag to point at the
 only published version, which is still explicitly a SemVer prerelease. Use the
 `beta` tag or the exact version while evaluating BugBonsai. No stable SemVer
-release will be published until the stable-release exit criteria are met. Future
+release will be published until the promotion criteria below are met. Future
 publication is a manual, protected workflow using npm Trusted Publishing and
 provenance.
+
+## Promotion to `latest`
+
+The `latest` dist-tag moves only after all of these conditions are documented:
+
+- at least 10 aggregate observations from people outside the project;
+- at least 3 real-project reproductions that preserve the intended failure and
+  pass recipient-side verification;
+- evidence from at least 3 ecosystem combinations beyond the synthetic fixtures;
+- at least 2 field-discovered gaps converted into license-safe corpus cases;
+- no unresolved report of source-project mutation, secret disclosure, wrong-failure
+  acceptance, corrupted resumability state, or recipient verification bypass;
+- the full Linux, macOS, and Windows matrix passes on supported Node releases;
+- the packed-consumer check passes for the exact promotion candidate; and
+- README installation commands, release notes, known limitations, provenance,
+  and rollback instructions have been reviewed.
+
+Downloads, stars, impressions, or one successful maintainer-run case do not
+satisfy these gates. If a blocker appears, publish another beta and restart the
+candidate review instead of moving `latest`.
 
 ## A useful first session
 
@@ -63,7 +83,8 @@ Use the [public beta feedback thread](https://github.com/captain-jack-sparrow909
 for quick observations, or open the
 [structured **Beta feedback** form](https://github.com/captain-jack-sparrow909/BugBonsai/issues/new?template=beta-feedback.yml)
 for a new environment-specific report. Release scope and known limitations are recorded
-in the [v0.1.0-beta.0 prerelease](https://github.com/captain-jack-sparrow909/BugBonsai/releases/tag/v0.1.0-beta.0).
+for the current package on the
+[`0.1.0-beta.3` npm page](https://www.npmjs.com/package/bugbonsai/v/0.1.0-beta.3).
 
 See [the compatibility scoreboard](../COMPATIBILITY.md) for the evidence behind
 each support level and [external dogfooding](../dogfood/README.md) for a

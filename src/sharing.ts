@@ -172,7 +172,7 @@ ${result.finalSignature.errorName ?? "Command failure"}${result.finalSignature.p
 ### Verification
 
 \`\`\`bash
-npx bugbonsai verify .
+npx bugbonsai@${VERSION} verify .
 \`\`\`
 `;
   await writeFile(path.join(root, file), content);

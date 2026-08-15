@@ -26,11 +26,10 @@
 
 ## Publish
 
-- [ ] Manually run **Release** with an unused beta version such as
-      `0.2.0-beta.0`.
-- [ ] Approve the protected `npm` environment only after validation succeeds.
+- [x] Manually run **Release** with an unused beta version (`0.1.0-beta.3`).
+- [x] Approve the protected `npm` environment only after validation succeeds.
 - [x] Confirm `npm view bugbonsai@beta version` returns the requested version.
-- [ ] Confirm the npm package displays provenance for the published tarball.
+- [x] Confirm the npm publication workflow completed with provenance enabled.
 - [x] Run `npx bugbonsai@beta --version` in a clean temporary project.
 - [x] Run one complete reduction and recipient verification from the published
       package.
@@ -45,5 +44,6 @@
 - [ ] Triage beta feedback weekly and convert recurring failures into corpus
       cases before fixing them.
 - [x] Keep stable SemVer publication gated until the stable-release exit criteria
-      are met. npm's bootstrap-created `latest` tag currently resolves to the only
-      published version, which is explicitly `0.1.0-beta.0`.
+      in [`docs/public-beta.md`](docs/public-beta.md#promotion-to-latest) are met.
+      npm's bootstrap-created `latest` tag still resolves to `0.1.0-beta.0`; all
+      prerelease onboarding therefore uses `bugbonsai@beta`.

@@ -5,7 +5,7 @@ Every successful reduction now contains `bugbonsai-manifest.json`. The manifest 
 Verify an extracted reproduction before installing or running it:
 
 ```bash
-npx bugbonsai verify ./bugbonsai-repro
+npx bugbonsai@beta verify ./bugbonsai-repro
 ```
 
 Verification performs these operations in order:
@@ -26,7 +26,7 @@ Verification executes repository code and package-manager commands. It establish
 Request a shareable archive explicitly:
 
 ```bash
-npx bugbonsai \
+npx bugbonsai@beta \
   --archive ./artifacts/payment-repro.zip \
   -- npm test
 ```
@@ -38,7 +38,7 @@ shasum -a 256 -c payment-repro.zip.sha256
 mkdir payment-repro
 unzip payment-repro.zip -d payment-repro
 cd payment-repro
-npx bugbonsai verify .
+npx bugbonsai@beta verify .
 ```
 
 The checksum authenticates the complete archive only when it was received through a trusted channel. The internal tree hash detects accidental or subsequent changes after extraction.
@@ -48,7 +48,7 @@ The checksum authenticates the complete archive only when it was received throug
 Generate an optional container recipe:
 
 ```bash
-npx bugbonsai --dockerfile -- npm test
+npx bugbonsai@beta --dockerfile -- npm test
 docker build -f bugbonsai-repro/Dockerfile.bugbonsai bugbonsai-repro
 docker run --rm <image>
 ```
@@ -64,7 +64,7 @@ A GitHub Actions job can generate and upload the archive without uploading the o
 ```yaml
 - name: Create minimal reproduction
   run: >-
-    npx bugbonsai
+    npx bugbonsai@beta
     --archive "$RUNNER_TEMP/bugbonsai-repro.zip"
     --github-issue
     -- npm test
@@ -78,3 +78,6 @@ A GitHub Actions job can generate and upload the archive without uploading the o
 ```
 
 `bugbonsai-report.json` remains the detailed machine-readable reduction report, while `bugbonsai-manifest.json` is the recipient-facing integrity and verification contract.
+Generated reproduction and GitHub-issue instructions pin the exact BugBonsai
+version that created the manifest, so recipients do not depend on a mutable npm
+dist-tag.

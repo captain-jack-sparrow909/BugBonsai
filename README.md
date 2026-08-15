@@ -7,12 +7,13 @@ BugBonsai turns a failing JavaScript or TypeScript project into a small, shareab
 ![BugBonsai terminal demonstration](docs/assets/bugbonsai-terminal.svg)
 
 ```bash
-npx bugbonsai -- npm test
+npx bugbonsai@beta -- npm test
 ```
 
-The public beta is available as
-[`v0.1.0-beta.0`](https://github.com/captain-jack-sparrow909/BugBonsai/releases/tag/v0.1.0-beta.0).
-Use `npx bugbonsai@beta -- npm test` to follow beta releases.
+The current public beta is
+[`0.1.0-beta.3`](https://www.npmjs.com/package/bugbonsai/v/0.1.0-beta.3).
+Use the `beta` tag during the prerelease period so npm does not resolve the
+bootstrap-created, outdated `latest` tag.
 
 BugBonsai is local-first, deterministic, durably resumable at command boundaries, and deliberately conservative. It never uploads source code or modifies existing files in the source project. Even baseline commands run inside disposable workspaces.
 
@@ -21,15 +22,15 @@ BugBonsai is local-first, deterministic, durably resumable at command boundaries
 From the project containing a stable failing command:
 
 ```bash
-npx bugbonsai -- npm test
+npx bugbonsai@beta -- npm test
 ```
 
 For a noisy failure, provide a distinctive fragment:
 
 ```bash
-npx bugbonsai --match "Hydration failed" -- pnpm build
-npx bugbonsai --match-regex "TS\\d{4}" -- pnpm typecheck
-npx bugbonsai --fail-on-output "Failed to resolve link" -- npm run docs
+npx bugbonsai@beta --match "Hydration failed" -- pnpm build
+npx bugbonsai@beta --match-regex "TS\\d{4}" -- pnpm typecheck
+npx bugbonsai@beta --fail-on-output "Failed to resolve link" -- npm run docs
 ```
 
 BugBonsai writes the verified reproduction to `./bugbonsai-repro` by default:
@@ -133,7 +134,7 @@ For a command run inside a workspace package, select the ancestor project root w
 
 ```bash
 cd apps/web
-npx bugbonsai --root ../.. -- pnpm test
+npx bugbonsai@beta --root ../.. -- pnpm test
 ```
 
 The generated instructions preserve `apps/web` as the command working directory.
@@ -216,7 +217,7 @@ Plugin components are namespaced as `plugin/component`, validated against API ve
 Every reproduction includes a content-addressed `bugbonsai-manifest.json`. Recipients can check the complete file tree and reproduce the exported failure with:
 
 ```bash
-npx bugbonsai verify ./bugbonsai-repro
+npx bugbonsai@beta verify ./bugbonsai-repro
 ```
 
 Use `--archive ./repro.zip` for a deterministic ZIP plus `.sha256` sidecar, `--dockerfile` for `Dockerfile.bugbonsai`, and `--github-issue` for an attachment-ready issue body. Environment-variable names are recorded without values, and an absolute current Node executable is normalized to `node`. See [docs/sharing.md](docs/sharing.md).

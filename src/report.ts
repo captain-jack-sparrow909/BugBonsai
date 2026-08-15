@@ -75,7 +75,7 @@ BugBonsai uses heuristic failure matching and secret detection. Review the repro
 Verify the received file manifest and reproduce the failure with:
 
 \`\`\`bash
-npx bugbonsai verify .
+npx bugbonsai@${VERSION} verify .
 \`\`\`
 `;
   await writeFile(path.join(result.outputDirectory, "BUGBONSAI.md"), markdown);

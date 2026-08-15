@@ -99,6 +99,24 @@ no dependency tree. Only the pinned revision, aggregate metrics, timing, and
 failure identity are recorded here; no upstream source or reproduction is
 stored in this repository.
 
+The same process uncovered a second isolation gap on 2026-08-14 using
+[`lucasmcht-corp/next-font-404-repro`](https://github.com/lucasmcht-corp/next-font-404-repro)
+at commit `c7355acb832acb8831c9773a663b5e63cf3ba94f`, linked from
+[`vercel/next.js#97378`](https://github.com/vercel/next.js/issues/97378). The
+original Next.js 16.3.1 build reproducibly failed with the reported Turbopack
+module-resolution error. BugBonsai `0.1.0-beta.3` initially replaced that
+failure with `Could not find the Next.js package` because the isolated
+candidate resolved its linked dependency snapshot outside the candidate root.
+BugBonsai now materializes that snapshot for detected Next.js projects. The
+fixed local candidate preserved the intended failure twice before reduction and
+three times afterward, reducing 8 project files and 35.6 KB to 4 files and
+32.3 KB in 86.7 seconds across 15 candidate executions.
+
+This remains engine field evidence rather than a Next.js support claim. The run
+used `--no-install`, so recipient portability was not evaluated, and the
+license-safe regression covers the isolation invariant rather than copying the
+upstream project into the corpus.
+
 Additional candidates were intentionally excluded from compatibility evidence:
 the historical reproduction for
 [`microsoft/TypeScript#48212`](https://github.com/microsoft/TypeScript/issues/48212)
