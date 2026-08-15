@@ -33,7 +33,8 @@ The phase succeeds when it collects:
 - zero reports containing private source, logs, secrets, or environment values.
 
 Record time to first useful reproduction where available. Use it to establish a
-beta.1 baseline rather than declaring a target before real-world evidence exists.
+current-beta baseline rather than declaring a target before real-world evidence
+exists.
 
 ## Channel sequence
 

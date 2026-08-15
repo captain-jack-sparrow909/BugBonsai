@@ -26,7 +26,7 @@
 
 ## Publish
 
-- [x] Manually run **Release** with an unused beta version (`0.1.0-beta.3`).
+- [x] Manually run **Release** with an unused beta version (`0.1.0-beta.4`).
 - [x] Approve the protected `npm` environment only after validation succeeds.
 - [x] Confirm `npm view bugbonsai@beta version` returns the requested version.
 - [x] Confirm the npm publication workflow completed with provenance enabled.

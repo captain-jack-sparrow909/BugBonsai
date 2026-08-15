@@ -7,13 +7,19 @@ cross-platform corpus.
 
 ## Current signal
 
-As of 2026-08-14, `0.1.0-beta.3` is published and the public beta feedback
+As of 2026-08-15, `0.1.0-beta.4` is published and the public beta feedback
 thread has no confirmed external BugBonsai run. A reply on an upstream issue is
 not counted unless the participant says they ran the package or provides
 aggregate run evidence. The project therefore has no basis for claiming
 real-user adoption or ecosystem success yet. Maintainer-run public failure
 investigations are recorded separately as field evidence and do not count as
 external adoption.
+
+The first beta.4 field note was posted on
+[`vercel/next.js#97378`](https://github.com/vercel/next.js/issues/97378#issuecomment-5302460447)
+after verifying the exact published package. This is targeted outreach, not an
+external observation; it enters the evidence count only if another participant
+runs BugBonsai and reports an outcome.
 
 Canonical feedback thread:
 https://github.com/captain-jack-sparrow909/BugBonsai/issues/9
@@ -37,6 +43,14 @@ failure across the complete reduction, and added a source-independent
 regression test for the realpath invariant. This is field-discovered engine
 evidence; it is not external adoption, recipient verification, or a promoted
 compatibility case.
+
+The exact npm package `0.1.0-beta.4` subsequently preserved the intended
+Turbopack failure twice before reduction and three times afterward, ending at 4
+project files and 32.3 KB across 24 candidate executions with 5 cached
+rejections. The checkout still contained artifacts from earlier dogfood runs,
+so its inflated 33-file starting inventory is not used as a reduction-quality
+comparison. The published run still used `--no-install`; it confirms the engine
+fix, not recipient portability.
 
 The initial local corpus run used Node 24.18.0 on macOS arm64 and produced:
 

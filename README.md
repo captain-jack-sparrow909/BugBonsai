@@ -11,7 +11,7 @@ npx bugbonsai@beta -- npm test
 ```
 
 The current public beta is
-[`0.1.0-beta.3`](https://www.npmjs.com/package/bugbonsai/v/0.1.0-beta.3).
+[`0.1.0-beta.4`](https://www.npmjs.com/package/bugbonsai/v/0.1.0-beta.4).
 Use the `beta` tag during the prerelease period so npm does not resolve the
 bootstrap-created, outdated `latest` tag.
 

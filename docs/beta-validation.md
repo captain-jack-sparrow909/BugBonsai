@@ -117,6 +117,15 @@ used `--no-install`, so recipient portability was not evaluated, and the
 license-safe regression covers the isolation invariant rather than copying the
 upstream project into the corpus.
 
+On 2026-08-15, the exact published npm package `0.1.0-beta.4` was run against
+the same pinned checkout. It preserved the intended failure twice before
+reduction and three times afterward, producing 4 project files and 32.3 KB
+across 24 candidate executions with 5 cached rejections. Earlier dogfood output
+directories inflated that run's starting inventory to 33 files, so the original
+count is intentionally excluded from quality comparisons. The recheck confirms
+the published engine fix; because it also used `--no-install`, it does not add a
+recipient-portability claim.
+
 Additional candidates were intentionally excluded from compatibility evidence:
 the historical reproduction for
 [`microsoft/TypeScript#48212`](https://github.com/microsoft/TypeScript/issues/48212)

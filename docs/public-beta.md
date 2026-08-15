@@ -15,7 +15,7 @@ npx bugbonsai@beta -- npm test
 Pin the exact version when recording a reproducible observation:
 
 ```bash
-npx bugbonsai@0.1.0-beta.3 --version
+npx bugbonsai@0.1.0-beta.4 --version
 ```
 
 The one-time package bootstrap caused npm's required `latest` tag to point at the
@@ -84,7 +84,7 @@ for quick observations, or open the
 [structured **Beta feedback** form](https://github.com/captain-jack-sparrow909/BugBonsai/issues/new?template=beta-feedback.yml)
 for a new environment-specific report. Release scope and known limitations are recorded
 for the current package on the
-[`0.1.0-beta.3` npm page](https://www.npmjs.com/package/bugbonsai/v/0.1.0-beta.3).
+[`0.1.0-beta.4` npm page](https://www.npmjs.com/package/bugbonsai/v/0.1.0-beta.4).
 
 See [the compatibility scoreboard](../COMPATIBILITY.md) for the evidence behind
 each support level and [external dogfooding](../dogfood/README.md) for a
